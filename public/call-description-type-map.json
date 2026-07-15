@@ -1,0 +1,6 @@
+{
+  "Fire": ["Structure Fire"],
+  "Drowning": ["Drowning"],
+  "Flood": ["Flood", "Chemical spill"],
+  "Car Incident": ["Car Incident"]
+}

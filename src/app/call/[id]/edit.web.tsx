@@ -20,8 +20,9 @@ import { Box } from '@/components/ui/box';
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
-import { CALL_DESCRIPTION_OPTIONS, CALL_DESCRIPTION_TYPE_MAP, getTypesForDescription } from '@/constants/callDescriptionTypeMap';
+import { getTypesForDescription } from '@/constants/callDescriptionTypeMap';
 import { useAnalytics } from '@/hooks/use-analytics';
+import { useCallDescriptionTypeMap } from '@/hooks/use-call-description-type-map';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
 import { type PoiResultData } from '@/models/v4/mapping/poiResultData';
 import { type UdfFieldValueInput } from '@/models/v4/userDefinedFields/udfFieldValueInput';
@@ -260,15 +261,16 @@ export default function EditCallWeb() {
 
   const watchedAddress = watch('address');
   const selectedDescription = watch('name');
-  const filteredCallTypes = useMemo(() => getTypesForDescription(selectedDescription, callTypes), [selectedDescription, callTypes]);
+  const callDescriptionTypeMap = useCallDescriptionTypeMap();
+  const filteredCallTypes = useMemo(() => getTypesForDescription(selectedDescription, callTypes, callDescriptionTypeMap), [selectedDescription, callTypes, callDescriptionTypeMap]);
   const descriptionOptions = useMemo(() => {
-    const options = [...CALL_DESCRIPTION_OPTIONS.map((d) => ({ id: d, name: d })), { id: 'Other', name: 'Other' }];
+    const options = [...Object.keys(callDescriptionTypeMap).map((d) => ({ id: d, name: d })), { id: 'Other', name: 'Other' }];
     const existingName = call?.Name;
     if (existingName && !options.some((o) => o.name === existingName)) {
       options.push({ id: existingName, name: existingName });
     }
     return options;
-  }, [call?.Name]);
+  }, [call?.Name, callDescriptionTypeMap]);
 
   useEffect(() => {
     fetchCallPriorities();
@@ -650,7 +652,7 @@ export default function EditCallWeb() {
                       value={value}
                       onChange={(newDescription) => {
                         onChange(newDescription);
-                        const mappedTypeNames = CALL_DESCRIPTION_TYPE_MAP[newDescription];
+                        const mappedTypeNames = callDescriptionTypeMap[newDescription];
                         if (!mappedTypeNames) return;
                         const matches = callTypes.filter((ct) => mappedTypeNames.includes(ct.Name));
                         if (matches.length === 1) {

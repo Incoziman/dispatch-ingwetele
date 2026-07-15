@@ -30,8 +30,9 @@ import { FocusAwareStatusBar } from '@/components/ui/focus-aware-status-bar';
 import { HStack } from '@/components/ui/hstack';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
-import { CALL_DESCRIPTION_OPTIONS, CALL_DESCRIPTION_TYPE_MAP, getTypesForDescription } from '@/constants/callDescriptionTypeMap';
+import { getTypesForDescription } from '@/constants/callDescriptionTypeMap';
 import { useAnalytics } from '@/hooks/use-analytics';
+import { useCallDescriptionTypeMap } from '@/hooks/use-call-description-type-map';
 import { useToast } from '@/hooks/use-toast';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
 import { type CallResultData } from '@/models/v4/calls/callResultData';
@@ -365,7 +366,9 @@ export default function NewCallWeb() {
   const watchedWhat3Words = watch('what3words');
   const watchedPlusCode = watch('plusCode');
   const selectedDescription = watch('name');
-  const filteredCallTypes = useMemo(() => getTypesForDescription(selectedDescription, callTypes), [selectedDescription, callTypes]);
+  const callDescriptionTypeMap = useCallDescriptionTypeMap();
+  const callDescriptionOptions = useMemo(() => Object.keys(callDescriptionTypeMap), [callDescriptionTypeMap]);
+  const filteredCallTypes = useMemo(() => getTypesForDescription(selectedDescription, callTypes, callDescriptionTypeMap), [selectedDescription, callTypes, callDescriptionTypeMap]);
 
   useEffect(() => {
     fetchCallPriorities();
@@ -812,7 +815,7 @@ export default function NewCallWeb() {
                           value={value}
                           onChange={(newDescription) => {
                             onChange(newDescription);
-                            const mappedTypeNames = CALL_DESCRIPTION_TYPE_MAP[newDescription];
+                            const mappedTypeNames = callDescriptionTypeMap[newDescription];
                             if (!mappedTypeNames) return;
                             const matches = callTypes.filter((ct) => mappedTypeNames.includes(ct.Name));
                             if (matches.length === 1) {
@@ -821,7 +824,7 @@ export default function NewCallWeb() {
                               setValue('type', '', { shouldValidate: true, shouldDirty: true });
                             }
                           }}
-                          options={[...CALL_DESCRIPTION_OPTIONS.map((d) => ({ id: d, name: d })), { id: 'Other', name: 'Other' }]}
+                          options={[...callDescriptionOptions.map((d) => ({ id: d, name: d })), { id: 'Other', name: 'Other' }]}
                           error={errors.name?.message}
                           required
                           testID="name-input"
