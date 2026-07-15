@@ -69,6 +69,4 @@ export interface AuthState {
   isAuthenticated: () => boolean;
   setIsOnboarding: () => void;
   loginWithSso: (authResponse: AuthResponse) => Promise<void>;
-  hasHydrated: boolean;
-  setHasHydrated: (value: boolean) => void;
 }
