@@ -41,6 +41,13 @@ const useAuthStore = create<AuthState>()(
       profile: null,
       userId: null,
       isFirstTime: true,
+      hasHydrated: false,
+      // Also recomputes `status` from the just-restored `accessToken` here, using
+      // this store's own `set`/`get` closure. Persisted status is excluded below,
+      // so this is the only place `status` gets reconciled after a cold load.
+      setHasHydrated: (value: boolean) => {
+        set((s) => ({ hasHydrated: value, status: value && s.accessToken ? 'signedIn' : s.status }));
+      },
       login: async (credentials: LoginCredentials) => {
         try {
           set({ status: 'loading', error: null });
@@ -245,16 +252,36 @@ const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      // Only persist essential auth data
+      // Only persist essential auth data. `status` is intentionally excluded —
+      // it's transient UI state recomputed on rehydration (see setHasHydrated
+      // below). Persisting it caused a mismatch between the pre-hydration
+      // default ('idle') and the restored session that tripped route guards
+      // before hydration completed on cold web loads.
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         refreshTokenExpiresOn: state.refreshTokenExpiresOn,
         profile: state.profile,
         userId: state.userId,
-        status: state.status,
         isFirstTime: state.isFirstTime,
       }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          logger.error({
+            message: 'Failed to rehydrate auth storage',
+            context: { error: error instanceof Error ? error.message : String(error) },
+          });
+        }
+        // Call the action bound to the just-rehydrated `state`, NOT the
+        // `useAuthStore` variable this `create()` call is assigning. On web the
+        // storage read is synchronous, so this callback runs synchronously
+        // inside `create()` — referencing `useAuthStore` by name here throws
+        // "Cannot access 'useAuthStore' before initialization" (TDZ), which
+        // zustand swallows, permanently skipping `hasHydrated` and leaving the
+        // whole app stuck on the loading screen. `state` already carries the
+        // correctly-scoped `set`/`get` closures, so this is TDZ-safe.
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
