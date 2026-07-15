@@ -9,27 +9,31 @@ services:
     ports:
       - "3000:80"
     environment:
+      # Values below are read via ${VAR:-default} so a `--env-file .env.docker`
+      # (see usage note at the bottom of this file) actually overrides them.
+      # Previously these were hardcoded literals, so no env file could ever
+      # take effect here.
       # API Configuration
-      - DISPATCH_BASE_API_URL=https://api.resgrid.com
-      - DISPATCH_API_VERSION=v4
-      - DISPATCH_RESGRID_API_URL=/api/v4
-      
+      - DISPATCH_BASE_API_URL=${DISPATCH_BASE_API_URL:-https://api.resgrid.com}
+      - DISPATCH_API_VERSION=${DISPATCH_API_VERSION:-v4}
+      - DISPATCH_RESGRID_API_URL=${DISPATCH_RESGRID_API_URL:-/api/v4}
+
       # SignalR Hub Configuration
-      - DISPATCH_CHANNEL_HUB_NAME=eventingHub
-      - DISPATCH_REALTIME_GEO_HUB_NAME=geolocationHub
-      
+      - DISPATCH_CHANNEL_HUB_NAME=${DISPATCH_CHANNEL_HUB_NAME:-eventingHub}
+      - DISPATCH_REALTIME_GEO_HUB_NAME=${DISPATCH_REALTIME_GEO_HUB_NAME:-geolocationHub}
+
       # Logging and Analytics
-      - DISPATCH_LOGGING_KEY=
-      - DISPATCH_APP_KEY=
-      - DISPATCH_SENTRY_DSN=
-      - DISPATCH_COUNTLY_APP_KEY=
-      - DISPATCH_COUNTLY_SERVER_URL=
-      
+      - DISPATCH_LOGGING_KEY=${DISPATCH_LOGGING_KEY:-}
+      - DISPATCH_APP_KEY=${DISPATCH_APP_KEY:-}
+      - DISPATCH_SENTRY_DSN=${DISPATCH_SENTRY_DSN:-}
+      - DISPATCH_COUNTLY_APP_KEY=${DISPATCH_COUNTLY_APP_KEY:-}
+      - DISPATCH_COUNTLY_SERVER_URL=${DISPATCH_COUNTLY_SERVER_URL:-}
+
       # Mapbox Configuration
-      - DISPATCH_MAPBOX_PUBKEY=
-      
+      - DISPATCH_MAPBOX_PUBKEY=${DISPATCH_MAPBOX_PUBKEY:-}
+
       # Feature Flags
-      - DISPATCH_MAINTENANCE_MODE=false
+      - DISPATCH_MAINTENANCE_MODE=${DISPATCH_MAINTENANCE_MODE:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
