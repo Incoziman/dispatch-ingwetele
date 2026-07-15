@@ -197,6 +197,8 @@
     "address_not_found": "Address not found, please try a different address",
     "address_placeholder": "Enter the address of the call",
     "address_required": "Please enter an address to search",
+    "call_description": "Call Description",
+    "call_description_placeholder": "Select a call description",
     "call_details": "Call Details",
     "call_location": "Call Location",
     "call_number": "Call Number",

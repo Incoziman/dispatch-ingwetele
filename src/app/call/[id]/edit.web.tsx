@@ -3,7 +3,7 @@ import axios from 'axios';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, SaveIcon, SearchIcon, XIcon } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -20,6 +20,7 @@ import { Box } from '@/components/ui/box';
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
+import { CALL_DESCRIPTION_OPTIONS, CALL_DESCRIPTION_TYPE_MAP, getTypesForDescription } from '@/constants/callDescriptionTypeMap';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
 import { type PoiResultData } from '@/models/v4/mapping/poiResultData';
@@ -108,6 +109,7 @@ const WebInput: React.FC<WebInputProps> = ({ label, placeholder, value, onChange
       <View style={styles.inputWrapper}>
         {multiline ? (
           <textarea
+            className="web-input-accessible"
             style={inputStyles as React.CSSProperties}
             placeholder={placeholder}
             value={value}
@@ -121,6 +123,7 @@ const WebInput: React.FC<WebInputProps> = ({ label, placeholder, value, onChange
         ) : (
           <input
             type="text"
+            className="web-input-accessible"
             style={inputStyles as React.CSSProperties}
             placeholder={placeholder}
             value={value}
@@ -149,9 +152,10 @@ interface WebSelectProps {
   error?: string;
   required?: boolean;
   useIdValue?: boolean;
+  testID?: string;
 }
 
-const WebSelect: React.FC<WebSelectProps> = ({ label, placeholder, value, onChange, options, error, required = false, useIdValue = false }) => {
+const WebSelect: React.FC<WebSelectProps> = ({ label, placeholder, value, onChange, options, error, required = false, useIdValue = false, testID }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -162,9 +166,11 @@ const WebSelect: React.FC<WebSelectProps> = ({ label, placeholder, value, onChan
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
       <select
+        className="web-input-accessible"
         style={StyleSheet.flatten([webStyles.webSelect as any, isDark ? styles.webSelectDark : styles.webSelectLight, error ? styles.webInputError : {}]) as React.CSSProperties}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        data-testid={testID}
       >
         <option value="">{placeholder}</option>
         {options.map((option) => (
@@ -222,6 +228,7 @@ export default function EditCallWeb() {
     handleSubmit,
     formState: { errors, isDirty },
     setValue,
+    getValues,
     reset,
     watch,
   } = useForm<FormValues>({
@@ -252,6 +259,16 @@ export default function EditCallWeb() {
   });
 
   const watchedAddress = watch('address');
+  const selectedDescription = watch('name');
+  const filteredCallTypes = useMemo(() => getTypesForDescription(selectedDescription, callTypes), [selectedDescription, callTypes]);
+  const descriptionOptions = useMemo(() => {
+    const options = [...CALL_DESCRIPTION_OPTIONS.map((d) => ({ id: d, name: d })), { id: 'Other', name: 'Other' }];
+    const existingName = call?.Name;
+    if (existingName && !options.some((o) => o.name === existingName)) {
+      options.push({ id: existingName, name: existingName });
+    }
+    return options;
+  }, [call?.Name]);
 
   useEffect(() => {
     fetchCallPriorities();
@@ -626,8 +643,27 @@ export default function EditCallWeb() {
                 <Controller
                   control={control}
                   name="name"
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <WebInput label={t('calls.name')} placeholder={t('calls.name_placeholder')} value={value} onChange={onChange} onBlur={onBlur} error={errors.name?.message} required autoFocus testID="name-input" />
+                  render={({ field: { onChange, value } }) => (
+                    <WebSelect
+                      label={t('calls.call_description')}
+                      placeholder={t('calls.call_description_placeholder')}
+                      value={value}
+                      onChange={(newDescription) => {
+                        onChange(newDescription);
+                        const mappedTypeNames = CALL_DESCRIPTION_TYPE_MAP[newDescription];
+                        if (!mappedTypeNames) return;
+                        const matches = callTypes.filter((ct) => mappedTypeNames.includes(ct.Name));
+                        if (matches.length === 1) {
+                          setValue('type', matches[0].Name, { shouldValidate: true, shouldDirty: true });
+                        } else if (!matches.some((ct) => ct.Name === getValues('type'))) {
+                          setValue('type', '', { shouldValidate: true, shouldDirty: true });
+                        }
+                      }}
+                      options={descriptionOptions}
+                      error={errors.name?.message}
+                      required
+                      testID="name-input"
+                    />
                   )}
                 />
 
@@ -678,7 +714,7 @@ export default function EditCallWeb() {
                           placeholder={t('calls.select_type')}
                           value={value}
                           onChange={onChange}
-                          options={callTypes.map((t) => ({ id: t.Id, name: t.Name }))}
+                          options={filteredCallTypes.map((t) => ({ id: t.Id, name: t.Name }))}
                           error={errors.type?.message}
                           required
                         />

@@ -3,7 +3,7 @@ import axios from 'axios';
 import { type Href, router, Stack } from 'expo-router';
 import { BookOpenIcon, CalendarClockIcon, ChevronDownIcon, ChevronUpIcon, FileTextIcon, LinkIcon, MapPinIcon, PlusIcon, SearchIcon, UserIcon, XIcon } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -30,6 +30,7 @@ import { FocusAwareStatusBar } from '@/components/ui/focus-aware-status-bar';
 import { HStack } from '@/components/ui/hstack';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
+import { CALL_DESCRIPTION_OPTIONS, CALL_DESCRIPTION_TYPE_MAP, getTypesForDescription } from '@/constants/callDescriptionTypeMap';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useToast } from '@/hooks/use-toast';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
@@ -227,9 +228,10 @@ interface WebSelectProps {
   error?: string;
   required?: boolean;
   useIdValue?: boolean;
+  testID?: string;
 }
 
-const WebSelect: React.FC<WebSelectProps> = ({ label, placeholder, value, onChange, options, error, required = false, useIdValue = false }) => {
+const WebSelect: React.FC<WebSelectProps> = ({ label, placeholder, value, onChange, options, error, required = false, useIdValue = false, testID }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -247,7 +249,7 @@ const WebSelect: React.FC<WebSelectProps> = ({ label, placeholder, value, onChan
         {label}
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
-      <select className="web-input-accessible" style={accessibleSelectStyles} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className="web-input-accessible" style={accessibleSelectStyles} value={value} onChange={(e) => onChange(e.target.value)} data-testid={testID}>
         <option value="">{placeholder}</option>
         {options.map((option) => (
           <option key={option.id} value={useIdValue ? String(option.id) : option.name}>
@@ -328,6 +330,7 @@ export default function NewCallWeb() {
     handleSubmit,
     formState: { errors },
     setValue,
+    getValues,
     watch,
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -361,6 +364,8 @@ export default function NewCallWeb() {
   const watchedCoordinates = watch('coordinates');
   const watchedWhat3Words = watch('what3words');
   const watchedPlusCode = watch('plusCode');
+  const selectedDescription = watch('name');
+  const filteredCallTypes = useMemo(() => getTypesForDescription(selectedDescription, callTypes), [selectedDescription, callTypes]);
 
   useEffect(() => {
     fetchCallPriorities();
@@ -800,8 +805,27 @@ export default function NewCallWeb() {
                     <Controller
                       control={control}
                       name="name"
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <WebInput label={t('calls.name')} placeholder={t('calls.name_placeholder')} value={value} onChange={onChange} onBlur={onBlur} error={errors.name?.message} required autoFocus testID="name-input" />
+                      render={({ field: { onChange, value } }) => (
+                        <WebSelect
+                          label={t('calls.call_description')}
+                          placeholder={t('calls.call_description_placeholder')}
+                          value={value}
+                          onChange={(newDescription) => {
+                            onChange(newDescription);
+                            const mappedTypeNames = CALL_DESCRIPTION_TYPE_MAP[newDescription];
+                            if (!mappedTypeNames) return;
+                            const matches = callTypes.filter((ct) => mappedTypeNames.includes(ct.Name));
+                            if (matches.length === 1) {
+                              setValue('type', matches[0].Name, { shouldValidate: true, shouldDirty: true });
+                            } else if (!matches.some((ct) => ct.Name === getValues('type'))) {
+                              setValue('type', '', { shouldValidate: true, shouldDirty: true });
+                            }
+                          }}
+                          options={[...CALL_DESCRIPTION_OPTIONS.map((d) => ({ id: d, name: d })), { id: 'Other', name: 'Other' }]}
+                          error={errors.name?.message}
+                          required
+                          testID="name-input"
+                        />
                       )}
                     />
 
@@ -852,7 +876,7 @@ export default function NewCallWeb() {
                               placeholder={t('calls.select_type')}
                               value={value}
                               onChange={onChange}
-                              options={callTypes.map((t) => ({ id: t.Id, name: t.Name }))}
+                              options={filteredCallTypes.map((t) => ({ id: t.Id, name: t.Name }))}
                               error={errors.type?.message}
                               required
                             />
