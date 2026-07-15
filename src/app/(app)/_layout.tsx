@@ -38,6 +38,7 @@ import { useWeatherAlertsStore } from '@/stores/weatherAlerts/store';
 export default function TabLayout() {
   const { t } = useTranslation();
   const { status } = useAuthStore();
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const { isLocked } = useLockscreenStore();
   const [isFirstTime, _setIsFirstTime] = useIsFirstTime();
   const [isOpen, setIsOpen] = React.useState(false);
@@ -337,7 +338,25 @@ export default function TabLayout() {
     });
 
     return <Redirect href={'/onboarding' as any} />;
-  } else if (status === 'signedOut' || status === 'idle' || status === 'error') {
+  }
+
+  // Wait for the persisted auth session to be restored before deciding
+  // whether the user is signed in. Without this, a cold page load (e.g.
+  // landing on a deep link) evaluates `status` before rehydration finishes,
+  // sees the pre-hydration default ('idle'), and incorrectly redirects to
+  // /login even when a valid session exists.
+  if (!hasHydrated) {
+    return (
+      <View style={styles.container}>
+        <View className="flex-1 items-center justify-center bg-white dark:bg-gray-900">
+          <ActivityIndicator size="large" color="#0066cc" />
+          <Text className="mt-4 text-lg text-gray-600 dark:text-gray-400">Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (status === 'signedOut' || status === 'idle' || status === 'error') {
     logger.info({
       message: 'User is not signed in, redirecting to login',
       context: { status },

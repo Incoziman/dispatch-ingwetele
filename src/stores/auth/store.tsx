@@ -41,6 +41,10 @@ const useAuthStore = create<AuthState>()(
       profile: null,
       userId: null,
       isFirstTime: true,
+      hasHydrated: false,
+      setHasHydrated: (value: boolean) => {
+        set({ hasHydrated: value });
+      },
       login: async (credentials: LoginCredentials) => {
         try {
           set({ status: 'loading', error: null });
@@ -245,16 +249,32 @@ const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      // Only persist essential auth data
+      // Only persist essential auth data. `status` is intentionally excluded —
+      // it's transient UI state and gets recomputed on rehydration; persisting
+      // it causes a mismatch between the pre-hydration default ('idle') and the
+      // restored session, which trips route guards before hydration completes.
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         refreshTokenExpiresOn: state.refreshTokenExpiresOn,
         profile: state.profile,
         userId: state.userId,
-        status: state.status,
         isFirstTime: state.isFirstTime,
       }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          logger.error({
+            message: 'Failed to rehydrate auth storage',
+            context: { error: error instanceof Error ? error.message : String(error) },
+          });
+        }
+        // Rehydration replaced accessToken/refreshToken/etc without touching
+        // `status` (it's excluded above), so recompute it from what came back.
+        useAuthStore.setState({
+          hasHydrated: true,
+          status: state?.accessToken ? 'signedIn' : useAuthStore.getState().status,
+        });
+      },
     }
   )
 );
