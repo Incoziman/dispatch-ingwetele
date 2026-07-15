@@ -1,4 +1,3 @@
-import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -144,20 +143,22 @@ const CallImagesModal: React.FC<CallImagesModalProps> = ({ isOpen, onClose, call
 
     setIsUploading(true);
     try {
-      // Manipulate image to ensure PNG format and proper compression
+      // Manipulate image to ensure PNG format and proper compression, requesting base64
+      // output directly since expo-file-system's readAsStringAsync is not supported on web.
       const manipulatedImage = await ImageManipulator.manipulateAsync(
         selectedImageInfo.uri,
         [{ resize: { width: 1024 } }], // Resize to max width of 1024px while maintaining aspect ratio
         {
           compress: 0.8,
           format: ImageManipulator.SaveFormat.PNG, // Ensure PNG format
+          base64: true,
         }
       );
 
-      // Read the manipulated image as base64
-      const base64Image = await FileSystem.readAsStringAsync(manipulatedImage.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const base64Image = manipulatedImage.base64;
+      if (!base64Image) {
+        throw new Error('Failed to read manipulated image data');
+      }
 
       // Get current location if available
       const currentLatitude = latitude;

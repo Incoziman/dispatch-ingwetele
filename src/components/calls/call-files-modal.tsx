@@ -5,7 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { Download, File, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Pressable } from 'react-native';
+import { Alert, Platform, Pressable } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 
 import { getCallAttachmentFile } from '@/api/calls/callFiles';
@@ -104,36 +104,50 @@ export const CallFilesModal: React.FC<CallFilesModalProps> = ({ isOpen, onClose,
         },
       });
 
-      // Create a temporary file
       const fileName = file.FileName || file.Name || `file_${file.Id}`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
 
-      // Convert blob to base64
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          // Remove data URL prefix if present
-          const base64 = result.split(',')[1] || result;
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(fileData);
-      });
-
-      // Write file to device
-      await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Share/open the file
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: file.Mime || 'application/octet-stream',
-          dialogTitle: file.Name || file.FileName,
-        });
+      if (Platform.OS === 'web') {
+        // expo-file-system and expo-sharing have no web implementations, so trigger
+        // a browser download directly from the fetched blob instead.
+        const blobUrl = URL.createObjectURL(fileData);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
       } else {
-        Alert.alert(t('calls.files.share_error'), 'Sharing is not available on this device');
+        // Create a temporary file
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
+        // Convert blob to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Remove data URL prefix if present
+            const base64 = result.split(',')[1] || result;
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(fileData);
+        });
+
+        // Write file to device
+        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Share/open the file
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: file.Mime || 'application/octet-stream',
+            dialogTitle: file.Name || file.FileName,
+          });
+        } else {
+          Alert.alert(t('calls.files.share_error'), 'Sharing is not available on this device');
+        }
       }
 
       setDownloadingFiles((prev) => {
