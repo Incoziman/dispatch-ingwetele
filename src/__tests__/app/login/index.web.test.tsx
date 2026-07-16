@@ -164,7 +164,7 @@ describe('LoginWeb', () => {
 
   it('renders the copyright text', () => {
     render(<LoginWeb />);
-    expect(screen.getByText(/Resgrid, LLC/)).toBeTruthy();
+    expect(screen.getByText(/Mbombela Dispatch/)).toBeTruthy();
   });
 
   it('opens server URL modal when server URL button is pressed', () => {

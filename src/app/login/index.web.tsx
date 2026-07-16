@@ -5,7 +5,7 @@ import { useColorScheme } from 'nativewind';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInRight, FadeInUp, FadeOut, FadeOutLeft } from 'react-native-reanimated';
 import * as z from 'zod';
 
@@ -281,12 +281,17 @@ export default function LoginWeb() {
               <View style={StyleSheet.flatten([styles.patternCircle, styles.patternCircle3])} />
             </View>
 
+            {/* Watermark Crest */}
+            <View style={styles.watermarkContainer} pointerEvents="none">
+              <Image style={styles.watermarkImage} source={require('@assets/images/Mbombela_CoA.png')} resizeMode="contain" />
+            </View>
+
             {/* Content */}
             <View style={styles.brandingContent}>
               {/* Large Prominent Logo */}
               <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.brandingLogoSection}>
                 <View style={styles.brandingLogoStack}>
-                  <Text style={styles.brandingLogoText}>Resgrid</Text>
+                  <Text style={styles.brandingLogoText}>Mbombela</Text>
                   <Text style={styles.brandingLogoSubtext}>Dispatch</Text>
                 </View>
               </Animated.View>
@@ -320,7 +325,7 @@ export default function LoginWeb() {
             {!isWideScreen ? (
               <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.mobileLogoContainer}>
                 <View style={styles.mobileLogoSection}>
-                  <Text style={StyleSheet.flatten([styles.mobileLogoText, isDark ? styles.mobileLogoTextDark : styles.mobileLogoTextLight])}>Resgrid</Text>
+                  <Text style={StyleSheet.flatten([styles.mobileLogoText, isDark ? styles.mobileLogoTextDark : styles.mobileLogoTextLight])}>Mbombela</Text>
                   <Text style={StyleSheet.flatten([styles.mobileLogoSubtext, isDark ? styles.mobileLogoSubtextDark : styles.mobileLogoSubtextLight])}>Dispatch</Text>
                 </View>
               </Animated.View>
@@ -420,7 +425,7 @@ export default function LoginWeb() {
                 </Text>
               </Text>
               <Text style={StyleSheet.flatten([styles.copyrightText, isDark ? styles.copyrightTextDark : styles.copyrightTextLight])}>
-                © {new Date().getFullYear()} Resgrid, LLC. {t('login.footer_text')}
+                © {new Date().getFullYear()} Mbombela Dispatch. {t('login.footer_text')}
               </Text>
             </Animated.View>
           </Animated.View>
@@ -560,6 +565,20 @@ const styles = StyleSheet.create({
     height: 200,
     top: '50%',
     left: '30%',
+  },
+  watermarkContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watermarkImage: {
+    width: 520,
+    height: 320,
+    opacity: 0.14,
   },
   brandingContent: {
     zIndex: 1,
