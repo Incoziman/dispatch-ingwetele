@@ -11,8 +11,9 @@ import { isRunningInExpoGo } from 'expo';
 import * as Notifications from 'expo-notifications';
 import { Stack, useNavigationContainerRef } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useColorScheme } from 'nativewind';
 import React, { useEffect } from 'react';
-import { LogBox, Platform, useColorScheme } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import FlashMessage from 'react-native-flash-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -205,7 +206,7 @@ function RootLayout() {
 }
 
 function Providers({ children }: { children: React.ReactNode }) {
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useColorScheme();
 
   const renderContent = () => (
     <APIProvider>
