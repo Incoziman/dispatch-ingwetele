@@ -401,7 +401,7 @@ export default function DispatchConsoleWeb() {
 
   // Handle expanding map
   const handleExpandMap = () => {
-    router.push('/(app)/home/map' as Href);
+    router.push('/(app)/map' as Href);
   };
 
   // Handle clearing call filter
