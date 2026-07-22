@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
 import { type GetConfigResultData } from '@/models/v4/configs/getConfigResultData';
 
 jest.mock('axios');
@@ -43,7 +44,7 @@ const performPlusCodeSearch = async (
     }
 
     // Make request to Google Maps Geocoding API
-    const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(plusCode)}&key=${apiKey}`);
+    const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(plusCode)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
 
     if (response.data.status === 'OK' && response.data.results.length > 0) {
       return { success: true, result: response.data.results[0] };
@@ -153,7 +154,7 @@ describe('Plus Code Search Logic', () => {
 
       await performPlusCodeSearch('849VCWC8+R9', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
   });
 
@@ -164,7 +165,7 @@ describe('Plus Code Search Logic', () => {
       const result = await performPlusCodeSearch('849VCWC8+R9', mockConfig);
 
       expect(result.success).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle short plus code (without area code)', async () => {
@@ -173,7 +174,7 @@ describe('Plus Code Search Logic', () => {
       const result = await performPlusCodeSearch('CWC8+R9', mockConfig);
 
       expect(result.success).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=CWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=CWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle plus code with city context', async () => {
@@ -182,7 +183,7 @@ describe('Plus Code Search Logic', () => {
       const result = await performPlusCodeSearch('CWC8+R9 Mountain View', mockConfig);
 
       expect(result.success).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=CWC8%2BR9%20Mountain%20View&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=CWC8%2BR9%20Mountain%20View&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle plus code with special characters', async () => {
@@ -191,7 +192,7 @@ describe('Plus Code Search Logic', () => {
       const result = await performPlusCodeSearch('849VCWC8+R9 Mountain View, CA', mockConfig);
 
       expect(result.success).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9%20Mountain%20View%2C%20CA&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9%20Mountain%20View%2C%20CA&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
   });
 
@@ -287,7 +288,7 @@ describe('Plus Code Search Logic', () => {
 
       await performPlusCodeSearch('849VCWC8+R9', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle plus codes with spaces', async () => {
@@ -295,7 +296,7 @@ describe('Plus Code Search Logic', () => {
 
       await performPlusCodeSearch('849V CWC8+R9', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849V%20CWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849V%20CWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle plus codes with unicode characters', async () => {
@@ -303,7 +304,7 @@ describe('Plus Code Search Logic', () => {
 
       await performPlusCodeSearch('849VCWC8+R9 Montréal', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9%20Montr%C3%A9al&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9%20Montr%C3%A9al&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
   });
 
@@ -340,7 +341,7 @@ describe('Plus Code Search Logic', () => {
       const result = await performPlusCodeSearch('849VCWC8+R9', mockConfig);
 
       // Verify API was called correctly
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
 
       // Verify result structure
       expect(result.success).toBe(true);
@@ -379,7 +380,7 @@ describe('Plus Code Search Logic', () => {
       const result = await performPlusCodeSearch('849VCWC8+R9', mockConfig);
 
       expect(result.success).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=849VCWC8%2BR9&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle New York City plus code', async () => {

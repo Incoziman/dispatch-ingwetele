@@ -896,6 +896,8 @@
     "on_call": "Im Einsatz",
     "filtered": "Gefiltert",
     "active_filter": "Aktiver Filter",
+    "filter_by_status": "Nach Status filtern",
+    "no_statuses_to_filter": "Keine Status zum Filtern",
     "unit_status_change": "Statusänderung der Einheit",
     "personnel_status_change": "Statusänderung des Personals",
     "view_call_details": "Einsatzdetails anzeigen",

@@ -895,6 +895,8 @@
     "on_call": "På ärende",
     "filtered": "Filtrerad",
     "active_filter": "Aktivt filter",
+    "filter_by_status": "Filtrera efter status",
+    "no_statuses_to_filter": "Inga statusar att filtrera",
     "unit_status_change": "Enhetsstatusändring",
     "personnel_status_change": "Personalstatusändring",
     "view_call_details": "Visa ärendedetaljer",

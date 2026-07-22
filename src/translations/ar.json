@@ -967,6 +967,8 @@
     "on_call": "في مكالمة",
     "filtered": "مفلتر",
     "active_filter": "فلتر نشط",
+    "filter_by_status": "تصفية حسب الحالة",
+    "no_statuses_to_filter": "لا توجد حالات للتصفية",
     "unit_status_change": "تغيير حالة الوحدة",
     "personnel_status_change": "تغيير حالة الموظف",
     "view_call_details": "عرض تفاصيل المكالمة",

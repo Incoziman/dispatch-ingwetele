@@ -36,6 +36,7 @@ import { Input, InputField } from '@/components/ui/input';
 import { Select, SelectBackdrop, SelectContent, SelectIcon, SelectInput, SelectItem, SelectPortal, SelectTrigger } from '@/components/ui/select';
 import { Text } from '@/components/ui/text';
 import { Textarea, TextareaInput } from '@/components/ui/textarea';
+import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useToast } from '@/hooks/use-toast';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
@@ -412,7 +413,7 @@ export default function NewCall() {
       }
 
       // Make request to Google Maps Geocoding API
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`);
+      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
 
       if (response.data.status === 'OK' && response.data.results.length > 0) {
         const results = response.data.results;
@@ -559,7 +560,7 @@ export default function NewCall() {
       }
 
       // Make request to Google Maps Geocoding API with plus code
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(plusCode)}&key=${apiKey}`);
+      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(plusCode)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
 
       if (response.data.status === 'OK' && response.data.results.length > 0) {
         const result = response.data.results[0];

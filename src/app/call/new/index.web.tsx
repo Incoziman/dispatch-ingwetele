@@ -31,6 +31,7 @@ import { HStack } from '@/components/ui/hstack';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
 import { getTypesForDescription } from '@/constants/callDescriptionTypeMap';
+import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useCallDescriptionTypeMap } from '@/hooks/use-call-description-type-map';
 import { useToast } from '@/hooks/use-toast';
@@ -591,7 +592,7 @@ export default function NewCallWeb() {
       const apiKey = config?.GoogleMapsKey;
       if (!apiKey) throw new Error('Google Maps API key not configured');
 
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`);
+      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
 
       if (response.data.status === 'OK' && response.data.results.length > 0) {
         const results = response.data.results;
@@ -676,7 +677,7 @@ export default function NewCallWeb() {
       const apiKey = config?.GoogleMapsKey;
       if (!apiKey) throw new Error('Google Maps API key not configured');
 
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(plusCode)}&key=${apiKey}`);
+      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(plusCode)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
 
       if (response.data.status === 'OK' && response.data.results.length > 0) {
         const result = response.data.results[0];

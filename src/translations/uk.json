@@ -895,6 +895,8 @@
     "on_call": "На виклику",
     "filtered": "Відфільтровано",
     "active_filter": "Активний фільтр",
+    "filter_by_status": "Фільтрувати за статусом",
+    "no_statuses_to_filter": "Немає статусів для фільтрації",
     "unit_status_change": "Зміна статусу підрозділу",
     "personnel_status_change": "Зміна статусу персоналу",
     "view_call_details": "Переглянути деталі виклику",

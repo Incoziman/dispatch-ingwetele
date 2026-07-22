@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
 import { type GetConfigResultData } from '@/models/v4/configs/getConfigResultData';
 
 // Mock axios
@@ -44,7 +45,7 @@ const performAddressSearch = async (
     }
 
     // Make request to Google Maps Geocoding API
-    const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`);
+    const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
 
     if (response.data.status === 'OK' && response.data.results.length > 0) {
       return { success: true, results: response.data.results };
@@ -180,7 +181,7 @@ describe('Address Search Logic', () => {
 
       await performAddressSearch('123 Main St, New York', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
   });
 
@@ -265,7 +266,7 @@ describe('Address Search Logic', () => {
 
       await performAddressSearch('123 Main St, New York & Brooklyn', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York%20%26%20Brooklyn&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York%20%26%20Brooklyn&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
 
     it('should handle addresses with unicode characters', async () => {
@@ -273,7 +274,7 @@ describe('Address Search Logic', () => {
 
       await performAddressSearch('123 Café Street, Montréal', mockConfig);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=123%20Caf%C3%A9%20Street%2C%20Montr%C3%A9al&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Caf%C3%A9%20Street%2C%20Montr%C3%A9al&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
     });
   });
 
@@ -310,7 +311,7 @@ describe('Address Search Logic', () => {
       const result = await performAddressSearch('123 Main St, New York', mockConfig);
 
       // Verify API was called correctly
-      expect(mockedAxios.get).toHaveBeenCalledWith('https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York&key=test-api-key');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
 
       // Verify result structure
       expect(result.success).toBe(true);

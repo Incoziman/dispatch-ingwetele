@@ -970,6 +970,8 @@
     "on_call": "En Llamada",
     "filtered": "Filtrado",
     "active_filter": "Filtro Activo",
+    "filter_by_status": "Filtrar por estado",
+    "no_statuses_to_filter": "No hay estados para filtrar",
     "unit_status_change": "Cambio de Estado de Unidad",
     "personnel_status_change": "Cambio de Estado de Personal",
     "view_call_details": "Ver Detalles de Llamada",

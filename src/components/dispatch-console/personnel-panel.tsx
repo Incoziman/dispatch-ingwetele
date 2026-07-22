@@ -1,10 +1,11 @@
 import { type Href, router } from 'expo-router';
-import { Circle, ExternalLink, Filter, MapPin, Plus, Search, User, Users, X } from 'lucide-react-native';
+import { Check, Circle, ExternalLink, Filter, MapPin, Plus, Search, User, Users, X } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { Actionsheet, ActionsheetBackdrop, ActionsheetContent, ActionsheetDragIndicator, ActionsheetDragIndicatorWrapper } from '@/components/ui/actionsheet';
 import { Badge } from '@/components/ui/badge';
 import { Box } from '@/components/ui/box';
 import { HStack } from '@/components/ui/hstack';
@@ -132,6 +133,8 @@ export const PersonnelPanel: React.FC<PersonnelPanelProps> = ({
   const { t } = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState<string[]>([]);
 
   // Handle personnel selection - notifies parent to handle actions
   const handleSelectPersonnel = useCallback(
@@ -144,7 +147,22 @@ export const PersonnelPanel: React.FC<PersonnelPanelProps> = ({
     [personnel, onSelectPersonnel]
   );
 
-  // Filter personnel based on call dispatches when filter is active and search query
+  // Distinct statuses currently present among personnel, used to populate the status filter
+  const availablePersonnelStatuses = useMemo(() => {
+    const statusColors = new Map<string, string>();
+    personnel.forEach((p) => {
+      if (p.Status) {
+        statusColors.set(p.Status, p.StatusColor || '#6b7280');
+      }
+    });
+    return Array.from(statusColors.entries()).map(([text, color]) => ({ text, color }));
+  }, [personnel]);
+
+  const toggleStatusFilter = useCallback((status: string) => {
+    setSelectedStatusFilters((prev) => (prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]));
+  }, []);
+
+  // Filter personnel based on call dispatches, selected statuses, and search query
   const displayedPersonnel = useMemo(() => {
     let filtered = personnel;
 
@@ -183,6 +201,11 @@ export const PersonnelPanel: React.FC<PersonnelPanelProps> = ({
       }
     }
 
+    // Apply status filter (e.g. Available, On Standby)
+    if (selectedStatusFilters.length > 0) {
+      filtered = filtered.filter((p) => selectedStatusFilters.includes(p.Status));
+    }
+
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
@@ -197,7 +220,7 @@ export const PersonnelPanel: React.FC<PersonnelPanelProps> = ({
     }
 
     return filtered;
-  }, [personnel, isCallFilterActive, callDispatches, selectedCallId, searchQuery]);
+  }, [personnel, isCallFilterActive, callDispatches, selectedCallId, selectedStatusFilters, searchQuery]);
 
   // Get dispatched personnel IDs and names for highlight matching
   const dispatchedPersonnelIds = useMemo(() => {
@@ -247,8 +270,9 @@ export const PersonnelPanel: React.FC<PersonnelPanelProps> = ({
                 </HStack>
               </Badge>
             ) : (
-              <Pressable style={styles.iconButton}>
-                <Icon as={Filter} size="xs" className="text-gray-500 dark:text-gray-400" />
+              <Pressable onPress={() => setIsStatusFilterOpen(true)} style={styles.iconButton} hitSlop={8} accessibilityLabel={t('dispatch.filter_by_status')}>
+                <Icon as={Filter} size="xs" className={selectedStatusFilters.length > 0 ? 'text-indigo-600 dark:text-indigo-300' : 'text-gray-500 dark:text-gray-400'} />
+                {selectedStatusFilters.length > 0 ? <View style={styles.filterBadgeDot} /> : null}
               </Pressable>
             )}
             <Pressable onPress={onRefresh} style={styles.iconButton}>
@@ -303,6 +327,50 @@ export const PersonnelPanel: React.FC<PersonnelPanelProps> = ({
           </ScrollView>
         </View>
       ) : null}
+
+      {/* Status Filter Action Sheet */}
+      <Actionsheet isOpen={isStatusFilterOpen} onClose={() => setIsStatusFilterOpen(false)} snapPoints={[50]}>
+        <ActionsheetBackdrop />
+        <ActionsheetContent className="rounded-t-2xl bg-white px-4 pb-6 dark:bg-gray-900">
+          <ActionsheetDragIndicatorWrapper>
+            <ActionsheetDragIndicator />
+          </ActionsheetDragIndicatorWrapper>
+          <VStack className="w-full" space="md">
+            <HStack className="items-center justify-between">
+              <Text className="text-lg font-semibold text-gray-800 dark:text-gray-100">{t('dispatch.filter_by_status')}</Text>
+              {selectedStatusFilters.length > 0 ? (
+                <Pressable onPress={() => setSelectedStatusFilters([])}>
+                  <Text className="text-sm font-medium text-indigo-600 dark:text-indigo-300">{t('dispatch.clear_filter')}</Text>
+                </Pressable>
+              ) : null}
+            </HStack>
+            <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+              {availablePersonnelStatuses.length === 0 ? (
+                <Text className="py-4 text-center text-gray-500 dark:text-gray-400">{t('dispatch.no_statuses_to_filter')}</Text>
+              ) : (
+                availablePersonnelStatuses.map(({ text, color }) => {
+                  const isSelected = selectedStatusFilters.includes(text);
+                  return (
+                    <Pressable key={text} onPress={() => toggleStatusFilter(text)}>
+                      <HStack
+                        className={`mb-2 items-center justify-between rounded-lg border-2 px-3 py-2.5 ${
+                          isSelected ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/20' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+                        }`}
+                      >
+                        <HStack className="items-center" space="sm">
+                          <Circle size={10} fill={color} color={color} />
+                          <Text className="text-sm font-medium text-gray-800 dark:text-gray-100">{text}</Text>
+                        </HStack>
+                        {isSelected ? <Icon as={Check} size="sm" className="text-indigo-600 dark:text-indigo-300" /> : null}
+                      </HStack>
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+          </VStack>
+        </ActionsheetContent>
+      </Actionsheet>
     </Box>
   );
 };
@@ -334,6 +402,18 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 4,
+  },
+  filterBadgeDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#6366f1',
+  },
+  sheetList: {
+    maxHeight: 300,
   },
   detailsButton: {
     padding: 4,

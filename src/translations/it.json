@@ -895,6 +895,8 @@
     "on_call": "In servizio",
     "filtered": "Filtrato",
     "active_filter": "Filtro attivo",
+    "filter_by_status": "Filtra per stato",
+    "no_statuses_to_filter": "Nessuno stato da filtrare",
     "unit_status_change": "Cambio stato unità",
     "personnel_status_change": "Cambio stato personale",
     "view_call_details": "Visualizza dettagli intervento",

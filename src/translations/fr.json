@@ -896,6 +896,8 @@
     "on_call": "En intervention",
     "filtered": "Filtré",
     "active_filter": "Filtre actif",
+    "filter_by_status": "Filtrer par statut",
+    "no_statuses_to_filter": "Aucun statut à filtrer",
     "unit_status_change": "Changement de statut d'unité",
     "personnel_status_change": "Changement de statut du personnel",
     "view_call_details": "Voir les détails de l'appel",

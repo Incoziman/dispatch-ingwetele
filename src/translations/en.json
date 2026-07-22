@@ -954,6 +954,8 @@
     "on_call": "On Call",
     "filtered": "Filtered",
     "active_filter": "Active Filter",
+    "filter_by_status": "Filter by Status",
+    "no_statuses_to_filter": "No statuses to filter",
     "unit_status_change": "Unit Status Change",
     "personnel_status_change": "Personnel Status Change",
     "view_call_details": "View Call Details",
