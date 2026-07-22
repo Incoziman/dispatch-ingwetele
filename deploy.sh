@@ -1,7 +1,12 @@
 #!/bin/sh
-# Build the shared dispatch:latest image and (re)deploy ONE tenant's
-# container from it.
+# Build the shared dispatch:latest image and (re)deploy tenant container(s)
+# from it.
 #   Usage: ./deploy.sh <tenant>      e.g. ./deploy.sh mbombela
+#          ./deploy.sh all           build once, redeploy every tenant in ./tenants/
+#
+# NOTE: a docker build only moves the dispatch:latest tag - running containers
+# keep the image they were started from. A tenant only picks up new code when
+# its container is recreated, which is what "all" is for.
 #
 # Per-tenant ops values (container name, host port, API/env targets) live in
 # ./tenants/<tenant>.env, sourced below. Branding (logo/watermark/display
@@ -16,44 +21,64 @@ cd "$(dirname "$0")"
 
 TENANT="$1"
 if [ -z "$TENANT" ]; then
-  echo "Usage: $0 <tenant>   (e.g. mbombela, mashishing)" >&2
+  echo "Usage: $0 <tenant>|all   (e.g. mbombela, mashishing)" >&2
   exit 1
 fi
 
-TENANT_ENV="tenants/${TENANT}.env"
-if [ ! -f "$TENANT_ENV" ]; then
-  echo "No such tenant config: $TENANT_ENV" >&2
-  exit 1
-fi
-. "$TENANT_ENV"
-
-RUNTIME_CONFIG_DIR="/home/res/dispatch-runtime-config/${TENANT}"
-if [ ! -f "${RUNTIME_CONFIG_DIR}/tenant-config.json" ]; then
-  echo "Missing ${RUNTIME_CONFIG_DIR}/tenant-config.json - create it before deploying." >&2
-  exit 1
+if [ "$TENANT" = "all" ]; then
+  TENANTS=""
+  for f in tenants/*.env; do
+    TENANTS="$TENANTS $(basename "$f" .env)"
+  done
+else
+  TENANTS="$TENANT"
 fi
 
-docker tag dispatch:latest "dispatch:${TENANT}-previous" 2>/dev/null || true
+# Fail early, before building: every tenant needs its env file + runtime config.
+for t in $TENANTS; do
+  if [ ! -f "tenants/${t}.env" ]; then
+    echo "No such tenant config: tenants/${t}.env" >&2
+    exit 1
+  fi
+  if [ ! -f "/home/res/dispatch-runtime-config/${t}/tenant-config.json" ]; then
+    echo "Missing /home/res/dispatch-runtime-config/${t}/tenant-config.json - create it before deploying." >&2
+    exit 1
+  fi
+done
+
+# Keep a per-tenant rollback tag pointing at the image each tenant runs now,
+# then build the shared image once.
+for t in $TENANTS; do
+  docker tag dispatch:latest "dispatch:${t}-previous" 2>/dev/null || true
+done
 docker build -t dispatch:latest .
 
-docker stop "$CONTAINER_NAME" 2>/dev/null || true
-docker rm "$CONTAINER_NAME" 2>/dev/null || true
+for t in $TENANTS; do
+  # Subshell so one tenant's env vars can't leak into the next tenant's run.
+  (
+    . "tenants/${t}.env"
+    RUNTIME_CONFIG_DIR="/home/res/dispatch-runtime-config/${t}"
 
-docker run -d \
-  --name "$CONTAINER_NAME" \
-  --restart unless-stopped \
-  --network resgrid-setup_rgmain \
-  -p "${HOST_PORT}:80" \
-  -v "${RUNTIME_CONFIG_DIR}/tenant-config.json:/usr/share/nginx/html/tenant-config.json:ro" \
-  -v /home/res/dispatch-runtime-config/call-description-type-map.json:/usr/share/nginx/html/call-description-type-map.json:ro \
-  -e DISPATCH_REALTIME_GEO_HUB_NAME="${DISPATCH_REALTIME_GEO_HUB_NAME}" \
-  -e DISPATCH_MAPBOX_PUBKEY="${DISPATCH_MAPBOX_PUBKEY}" \
-  -e APP_ENV="${APP_ENV}" \
-  -e DISPATCH_BASE_API_URL="${DISPATCH_BASE_API_URL}" \
-  -e DISPATCH_API_VERSION="${DISPATCH_API_VERSION}" \
-  -e DISPATCH_RESGRID_API_URL="${DISPATCH_RESGRID_API_URL}" \
-  -e DISPATCH_CHANNEL_HUB_NAME="${DISPATCH_CHANNEL_HUB_NAME}" \
-  dispatch:latest
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
-echo "Deployed ${CONTAINER_NAME} (tenant=${TENANT}) from dispatch:latest."
-echo "To roll back: ./rollback.sh ${TENANT}"
+    docker run -d \
+      --name "$CONTAINER_NAME" \
+      --restart unless-stopped \
+      --network resgrid-setup_rgmain \
+      -p "${HOST_PORT}:80" \
+      -v "${RUNTIME_CONFIG_DIR}/tenant-config.json:/usr/share/nginx/html/tenant-config.json:ro" \
+      -v /home/res/dispatch-runtime-config/call-description-type-map.json:/usr/share/nginx/html/call-description-type-map.json:ro \
+      -e DISPATCH_REALTIME_GEO_HUB_NAME="${DISPATCH_REALTIME_GEO_HUB_NAME}" \
+      -e DISPATCH_MAPBOX_PUBKEY="${DISPATCH_MAPBOX_PUBKEY}" \
+      -e APP_ENV="${APP_ENV}" \
+      -e DISPATCH_BASE_API_URL="${DISPATCH_BASE_API_URL}" \
+      -e DISPATCH_RESGRID_API_URL="${DISPATCH_RESGRID_API_URL}" \
+      -e DISPATCH_API_VERSION="${DISPATCH_API_VERSION}" \
+      -e DISPATCH_CHANNEL_HUB_NAME="${DISPATCH_CHANNEL_HUB_NAME}" \
+      dispatch:latest
+
+    echo "Deployed ${CONTAINER_NAME} (tenant=${t}) from dispatch:latest."
+    echo "To roll back: ./rollback.sh ${t}"
+  )
+done

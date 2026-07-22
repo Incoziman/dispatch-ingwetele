@@ -170,6 +170,8 @@ From `~/Dispatch`:
 
 This builds the shared `dispatch:latest` image (if source changed) and (re)starts `dispatch-newcity` with the tenant's env values and bind mounts. To roll back to the previous build for this tenant only: `./rollback.sh newcity`.
 
+Note: rebuilding the image does **not** update already-running containers — each tenant only picks up new code when its container is recreated. To ship a code change to every tenant at once (build once, restart all): `./deploy.sh all`.
+
 ### 9. Verify end-to-end
 
 ```sh
