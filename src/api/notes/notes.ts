@@ -1,3 +1,4 @@
+import { cacheManager } from '@/lib/cache/cache-manager';
 import { type NoteCategoryResult } from '@/models/v4/notes/noteCategoryResult';
 import { type NoteResult } from '@/models/v4/notes/noteResult';
 import { type NotesResult } from '@/models/v4/notes/notesResult';
@@ -62,5 +63,16 @@ export const saveNote = async (data: SaveNoteInput) => {
   const response = await saveNoteApi.post<SaveNoteResult>({
     ...data,
   });
+
+  // The API returns HTTP 200 even when it rejects the save (e.g. invalid payload);
+  // the only signal is this envelope field, so surface it as a real failure.
+  if (response.data.Status?.toLowerCase() === 'failure') {
+    throw new Error(`Failed to save note (status: ${response.data.Status})`);
+  }
+
+  // Invalidate cached note lists so newly saved notes show up immediately.
+  cacheManager.remove('/Notes/GetAllNotes');
+  cacheManager.remove('/Notes/GetDispatchNote');
+
   return response.data;
 };

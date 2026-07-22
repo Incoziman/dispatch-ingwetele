@@ -93,7 +93,7 @@ export function AddNoteBottomSheet({ isOpen, onClose, onNoteAdded }: AddNoteBott
       noteInput.Body = data.body;
       noteInput.Category = data.category;
       noteInput.IsAdminOnly = false;
-      noteInput.ExpiresOn = '';
+      noteInput.ExpiresOn = null;
 
       await saveNote(noteInput);
 

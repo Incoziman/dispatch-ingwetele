@@ -21,13 +21,13 @@ import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { getTypesForDescription } from '@/constants/callDescriptionTypeMap';
-import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
+import { MAPBOX_SEARCH_BIAS_PARAMS } from '@/constants/geocoding';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useCallDescriptionTypeMap } from '@/hooks/use-call-description-type-map';
+import { Env } from '@/lib/env';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
 import { type PoiResultData } from '@/models/v4/mapping/poiResultData';
 import { type UdfFieldValueInput } from '@/models/v4/userDefinedFields/udfFieldValueInput';
-import { useCoreStore } from '@/stores/app/core-store';
 import { useCallDetailStore } from '@/stores/calls/detail-store';
 import { useCallsStore } from '@/stores/calls/store';
 import { type DispatchSelection } from '@/stores/dispatch/store';
@@ -67,9 +67,14 @@ interface GeocodingResult {
   geometry: { location: { lat: number; lng: number } };
 }
 
-interface GeocodingResponse {
-  results: GeocodingResult[];
-  status: string;
+interface MapboxFeature {
+  id: string;
+  place_name: string;
+  center: [number, number]; // [lng, lat]
+}
+
+interface MapboxGeocodingResponse {
+  features: MapboxFeature[];
 }
 
 // Web-optimized input component
@@ -196,7 +201,6 @@ export default function EditCallWeb() {
 
   const { callPriorities, callTypes, isLoading: callDataLoading, error: callDataError, fetchCallPriorities, fetchCallTypes } = useCallsStore();
   const { call, callExtraData, isLoading: callDetailLoading, error: callDetailError, fetchCallDetail } = useCallDetailStore();
-  const { config } = useCoreStore();
   const toast = useToast();
 
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -522,13 +526,18 @@ export default function EditCallWeb() {
 
     setIsGeocodingAddress(true);
     try {
-      const apiKey = config?.GoogleMapsKey;
-      if (!apiKey) throw new Error('Google Maps API key not configured');
+      const apiKey = Env.MAPBOX_PUBKEY;
+      if (!apiKey) throw new Error('Mapbox public key not configured');
 
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
+      const response = await axios.get<MapboxGeocodingResponse>(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${apiKey}${MAPBOX_SEARCH_BIAS_PARAMS}`);
 
-      if (response.data.status === 'OK' && response.data.results.length > 0) {
-        const results = response.data.results;
+      const results: GeocodingResult[] = response.data.features.map((feature) => ({
+        formatted_address: feature.place_name,
+        geometry: { location: { lat: feature.center[1], lng: feature.center[0] } },
+        place_id: feature.id,
+      }));
+
+      if (results.length > 0) {
         if (results.length === 1) {
           const result = results[0];
           handleLocationSelected({

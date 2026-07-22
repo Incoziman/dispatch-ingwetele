@@ -36,6 +36,12 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Copy built web app from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# Copy per-tenant branding assets (crests/watermarks), served statically.
+# Which tenant a given running container actually displays is selected
+# entirely by which tenant-config.json got bind-mounted at deploy time
+# (see deploy.sh), not by anything in this image build.
+COPY branding /usr/share/nginx/html/branding
+
 # Copy the docker entrypoint script
 COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

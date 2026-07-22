@@ -1,12 +1,21 @@
 import axios from 'axios';
-import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
-import { type GetConfigResultData } from '@/models/v4/configs/getConfigResultData';
+import { MAPBOX_SEARCH_BIAS_PARAMS } from '@/constants/geocoding';
 
 // Mock axios
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-// Google Maps Geocoding API response types
+// Mapbox Geocoding API response types
+interface MapboxFeature {
+  id: string;
+  place_name: string;
+  center: [number, number]; // [lng, lat]
+}
+
+interface MapboxGeocodingResponse {
+  features: MapboxFeature[];
+}
+
 interface GeocodingResult {
   formatted_address: string;
   geometry: {
@@ -18,15 +27,10 @@ interface GeocodingResult {
   place_id: string;
 }
 
-interface GeocodingResponse {
-  results: GeocodingResult[];
-  status: string;
-}
-
 // Address search logic extracted for testing
 const performAddressSearch = async (
   address: string,
-  config: GetConfigResultData | null
+  mapboxKey: string
 ): Promise<{
   success: boolean;
   results?: GeocodingResult[];
@@ -36,19 +40,22 @@ const performAddressSearch = async (
     return { success: false, error: 'Address is required' };
   }
 
+  if (!mapboxKey) {
+    return { success: false, error: 'Mapbox public key not configured' };
+  }
+
   try {
-    // Get Google Maps API key from CoreStore config
-    const apiKey = config?.GoogleMapsKey;
+    // Make request to the Mapbox Geocoding API
+    const response = await axios.get<MapboxGeocodingResponse>(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${mapboxKey}${MAPBOX_SEARCH_BIAS_PARAMS}`);
 
-    if (!apiKey) {
-      return { success: false, error: 'Google Maps API key not configured' };
-    }
+    const results: GeocodingResult[] = response.data.features.map((feature) => ({
+      formatted_address: feature.place_name,
+      geometry: { location: { lat: feature.center[1], lng: feature.center[0] } },
+      place_id: feature.id,
+    }));
 
-    // Make request to Google Maps Geocoding API
-    const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
-
-    if (response.data.status === 'OK' && response.data.results.length > 0) {
-      return { success: true, results: response.data.results };
+    if (results.length > 0) {
+      return { success: true, results };
     } else {
       return { success: false, error: 'No results found' };
     }
@@ -58,79 +65,43 @@ const performAddressSearch = async (
 };
 
 describe('Address Search Logic', () => {
-  const mockSingleGeocodingResult: GeocodingResponse = {
-    status: 'OK',
-    results: [
+  const mockSingleFeatureResult: MapboxGeocodingResponse = {
+    features: [
       {
-        formatted_address: '123 Main St, New York, NY 10001, USA',
-        geometry: {
-          location: {
-            lat: 40.7128,
-            lng: -74.006,
-          },
-        },
-        place_id: 'ChIJOwg_06VPwokRYv534QaPC8g',
+        id: 'address.123456',
+        place_name: '123 Main St, New York, NY 10001, USA',
+        center: [-74.006, 40.7128],
       },
     ],
   };
 
-  const mockMultipleGeocodingResults: GeocodingResponse = {
-    status: 'OK',
-    results: [
+  const mockMultipleFeatureResults: MapboxGeocodingResponse = {
+    features: [
       {
-        formatted_address: '123 Main St, New York, NY 10001, USA',
-        geometry: {
-          location: {
-            lat: 40.7128,
-            lng: -74.006,
-          },
-        },
-        place_id: 'ChIJOwg_06VPwokRYv534QaPC8g',
+        id: 'address.123456',
+        place_name: '123 Main St, New York, NY 10001, USA',
+        center: [-74.006, 40.7128],
       },
       {
-        formatted_address: '123 Main St, Brooklyn, NY 11201, USA',
-        geometry: {
-          location: {
-            lat: 40.6892,
-            lng: -73.9442,
-          },
-        },
-        place_id: 'ChIJOwg_06VPwokRYv534QaPC8h',
+        id: 'address.789012',
+        place_name: '123 Main St, Brooklyn, NY 11201, USA',
+        center: [-73.9442, 40.6892],
       },
     ],
   };
 
-  // Mock config with API key
-  const mockConfig: GetConfigResultData = {
-    GoogleMapsKey: 'test-api-key',
-    W3WKey: '',
-    EventingUrl: '',
-    LoggingKey: '',
-    MapUrl: '',
-    MapAttribution: '',
-    OpenWeatherApiKey: '',
-    DirectionsMapKey: '',
-    PersonnelLocationStaleSeconds: 300,
-    UnitLocationStaleSeconds: 300,
-    PersonnelLocationMinMeters: 15,
-    UnitLocationMinMeters: 15,
-    NovuBackendApiUrl: '',
-    NovuSocketUrl: '',
-    NovuApplicationId: '',
-    AnalyticsApiKey: '',
-    AnalyticsHost: '',
-  };
+  const mockApiKey = 'test-mapbox-key';
 
   beforeEach(() => {
     jest.clearAllMocks();
 
     // Set default successful axios response
-    mockedAxios.get.mockResolvedValue({ data: mockSingleGeocodingResult });
+    mockedAxios.get.mockResolvedValue({ data: mockSingleFeatureResult });
   });
 
   describe('Input Validation', () => {
     it('should reject empty address string', async () => {
-      const result = await performAddressSearch('', mockConfig);
+      const result = await performAddressSearch('', mockApiKey);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Address is required');
@@ -138,7 +109,7 @@ describe('Address Search Logic', () => {
     });
 
     it('should reject whitespace-only address string', async () => {
-      const result = await performAddressSearch('   ', mockConfig);
+      const result = await performAddressSearch('   ', mockApiKey);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Address is required');
@@ -148,48 +119,27 @@ describe('Address Search Logic', () => {
 
   describe('API Configuration', () => {
     it('should handle missing API key gracefully', async () => {
-      // Mock config without API key
-      const configWithoutKey: GetConfigResultData = {
-        GoogleMapsKey: '',
-        W3WKey: '',
-        EventingUrl: '',
-        LoggingKey: '',
-        MapUrl: '',
-        MapAttribution: '',
-        OpenWeatherApiKey: '',
-        DirectionsMapKey: '',
-        PersonnelLocationStaleSeconds: 300,
-        UnitLocationStaleSeconds: 300,
-        PersonnelLocationMinMeters: 15,
-        UnitLocationMinMeters: 15,
-        NovuBackendApiUrl: '',
-        NovuSocketUrl: '',
-        NovuApplicationId: '',
-        AnalyticsApiKey: '',
-        AnalyticsHost: '',
-      };
-
-      const result = await performAddressSearch('123 Main St', configWithoutKey);
+      const result = await performAddressSearch('123 Main St', '');
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Google Maps API key not configured');
+      expect(result.error).toBe('Mapbox public key not configured');
       expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 
     it('should use correct API endpoint and parameters', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockSingleGeocodingResult });
+      mockedAxios.get.mockResolvedValue({ data: mockSingleFeatureResult });
 
-      await performAddressSearch('123 Main St, New York', mockConfig);
+      await performAddressSearch('123 Main St, New York', mockApiKey);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://api.mapbox.com/geocoding/v5/mapbox.places/123%20Main%20St%2C%20New%20York.json?access_token=test-mapbox-key${MAPBOX_SEARCH_BIAS_PARAMS}`);
     });
   });
 
   describe('Geocoding Results', () => {
     it('should handle single geocoding result', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockSingleGeocodingResult });
+      mockedAxios.get.mockResolvedValue({ data: mockSingleFeatureResult });
 
-      const result = await performAddressSearch('123 Main St', mockConfig);
+      const result = await performAddressSearch('123 Main St', mockApiKey);
 
       expect(result.success).toBe(true);
       expect(result.results).toHaveLength(1);
@@ -199,9 +149,9 @@ describe('Address Search Logic', () => {
     });
 
     it('should handle multiple geocoding results', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockMultipleGeocodingResults });
+      mockedAxios.get.mockResolvedValue({ data: mockMultipleFeatureResults });
 
-      const result = await performAddressSearch('123 Main St', mockConfig);
+      const result = await performAddressSearch('123 Main St', mockApiKey);
 
       expect(result.success).toBe(true);
       expect(result.results).toHaveLength(2);
@@ -209,23 +159,10 @@ describe('Address Search Logic', () => {
       expect(result.results![1].formatted_address).toBe('123 Main St, Brooklyn, NY 11201, USA');
     });
 
-    it('should handle no results from geocoding API', async () => {
-      mockedAxios.get.mockResolvedValue({
-        data: { status: 'ZERO_RESULTS', results: [] },
-      });
+    it('should handle no results from the geocoding API', async () => {
+      mockedAxios.get.mockResolvedValue({ data: { features: [] } });
 
-      const result = await performAddressSearch('NonExistentAddress', mockConfig);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('No results found');
-    });
-
-    it('should handle invalid status from geocoding API', async () => {
-      mockedAxios.get.mockResolvedValue({
-        data: { status: 'INVALID_REQUEST', results: [] },
-      });
-
-      const result = await performAddressSearch('123 Main St', mockConfig);
+      const result = await performAddressSearch('NonExistentAddress', mockApiKey);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('No results found');
@@ -236,7 +173,7 @@ describe('Address Search Logic', () => {
     it('should handle network errors gracefully', async () => {
       mockedAxios.get.mockRejectedValue(new Error('Network Error'));
 
-      const result = await performAddressSearch('123 Main St', mockConfig);
+      const result = await performAddressSearch('123 Main St', mockApiKey);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Network error');
@@ -245,73 +182,61 @@ describe('Address Search Logic', () => {
     it('should handle API timeout errors', async () => {
       mockedAxios.get.mockRejectedValue(new Error('timeout'));
 
-      const result = await performAddressSearch('123 Main St', mockConfig);
+      const result = await performAddressSearch('123 Main St', mockApiKey);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Network error');
-    });
-
-    it('should handle null config', async () => {
-      const result = await performAddressSearch('123 Main St', null);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Google Maps API key not configured');
-      expect(mockedAxios.get).not.toHaveBeenCalled();
     });
   });
 
   describe('Address Encoding', () => {
     it('should properly encode special characters in addresses', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockSingleGeocodingResult });
+      mockedAxios.get.mockResolvedValue({ data: mockSingleFeatureResult });
 
-      await performAddressSearch('123 Main St, New York & Brooklyn', mockConfig);
+      await performAddressSearch('123 Main St, New York & Brooklyn', mockApiKey);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York%20%26%20Brooklyn&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://api.mapbox.com/geocoding/v5/mapbox.places/123%20Main%20St%2C%20New%20York%20%26%20Brooklyn.json?access_token=test-mapbox-key${MAPBOX_SEARCH_BIAS_PARAMS}`);
     });
 
     it('should handle addresses with unicode characters', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockSingleGeocodingResult });
+      mockedAxios.get.mockResolvedValue({ data: mockSingleFeatureResult });
 
-      await performAddressSearch('123 Café Street, Montréal', mockConfig);
+      await performAddressSearch('123 Café Street, Montréal', mockApiKey);
 
-      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Caf%C3%A9%20Street%2C%20Montr%C3%A9al&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://api.mapbox.com/geocoding/v5/mapbox.places/123%20Caf%C3%A9%20Street%2C%20Montr%C3%A9al.json?access_token=test-mapbox-key${MAPBOX_SEARCH_BIAS_PARAMS}`);
     });
   });
 
   describe('Data Structure Validation', () => {
-    it('should validate geocoding result structure', async () => {
-      const validResult = {
-        formatted_address: '123 Main St, New York, NY 10001, USA',
-        geometry: {
-          location: {
-            lat: 40.7128,
-            lng: -74.006,
-          },
-        },
-        place_id: 'ChIJOwg_06VPwokRYv534QaPC8g',
+    it('should map a Mapbox feature into the expected result structure', async () => {
+      const feature: MapboxFeature = {
+        id: 'address.123456',
+        place_name: '123 Main St, New York, NY 10001, USA',
+        center: [-74.006, 40.7128],
       };
 
-      mockedAxios.get.mockResolvedValue({ data: { status: 'OK', results: [validResult] } });
+      mockedAxios.get.mockResolvedValue({ data: { features: [feature] } });
 
-      const result = await performAddressSearch('123 Main St', mockConfig);
+      const result = await performAddressSearch('123 Main St', mockApiKey);
 
       expect(result.success).toBe(true);
-      expect(result.results![0]).toEqual(validResult);
-      expect(result.results![0].geometry.location.lat).toBeDefined();
-      expect(result.results![0].geometry.location.lng).toBeDefined();
-      expect(result.results![0].formatted_address).toBeDefined();
+      expect(result.results![0]).toEqual({
+        formatted_address: '123 Main St, New York, NY 10001, USA',
+        geometry: { location: { lat: 40.7128, lng: -74.006 } },
+        place_id: 'address.123456',
+      });
     });
   });
 
   describe('Integration Flow', () => {
     it('should complete entire geocoding flow successfully', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockSingleGeocodingResult });
+      mockedAxios.get.mockResolvedValue({ data: mockSingleFeatureResult });
 
       // Test complete flow
-      const result = await performAddressSearch('123 Main St, New York', mockConfig);
+      const result = await performAddressSearch('123 Main St, New York', mockApiKey);
 
       // Verify API was called correctly
-      expect(mockedAxios.get).toHaveBeenCalledWith(`https://maps.googleapis.com/maps/api/geocode/json?address=123%20Main%20St%2C%20New%20York&key=test-api-key${GEOCODING_BIAS_PARAMS}`);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`https://api.mapbox.com/geocoding/v5/mapbox.places/123%20Main%20St%2C%20New%20York.json?access_token=test-mapbox-key${MAPBOX_SEARCH_BIAS_PARAMS}`);
 
       // Verify result structure
       expect(result.success).toBe(true);

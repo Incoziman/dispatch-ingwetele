@@ -22,7 +22,6 @@ import { ContactPickerModal } from '@/components/calls/contact-picker-modal';
 import { DispatchSelectionModal } from '@/components/calls/dispatch-selection-modal';
 import { LinkedCallsModal } from '@/components/calls/linked-calls-modal';
 import { ProtocolSelectorModal, type SelectedProtocol } from '@/components/calls/protocol-selector-modal';
-import { UdfFieldsRenderer } from '@/components/calls/udf-fields-renderer';
 import { Loading } from '@/components/common/loading';
 import FullScreenLocationPicker from '@/components/maps/full-screen-location-picker';
 import LocationPicker from '@/components/maps/location-picker';
@@ -36,9 +35,10 @@ import { Input, InputField } from '@/components/ui/input';
 import { Select, SelectBackdrop, SelectContent, SelectIcon, SelectInput, SelectItem, SelectPortal, SelectTrigger } from '@/components/ui/select';
 import { Text } from '@/components/ui/text';
 import { Textarea, TextareaInput } from '@/components/ui/textarea';
-import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
+import { GEOCODING_BIAS_PARAMS, MAPBOX_SEARCH_BIAS_PARAMS } from '@/constants/geocoding';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useToast } from '@/hooks/use-toast';
+import { Env } from '@/lib/env';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
 import { type CallResultData } from '@/models/v4/calls/callResultData';
 import { type ContactResultData } from '@/models/v4/contacts/contactResultData';
@@ -95,6 +95,17 @@ interface GeocodingResult {
 interface GeocodingResponse {
   results: GeocodingResult[];
   status: string;
+}
+
+// Mapbox Geocoding API response types
+interface MapboxFeature {
+  id: string;
+  place_name: string;
+  center: [number, number]; // [lng, lat]
+}
+
+interface MapboxGeocodingResponse {
+  features: MapboxFeature[];
 }
 
 // what3words API response types
@@ -384,18 +395,22 @@ export default function NewCall() {
   };
 
   /**
-   * Handles address search using Google Maps Geocoding API
+   * Handles address search using the Mapbox Geocoding API
    *
    * Features:
    * - Validates empty/null address input and shows error toast
-   * - Uses Google Maps API key from CoreStore configuration
+   * - Uses the Mapbox public key already configured for map tiles/reverse-geocoding
    * - Handles single result: automatically selects location
    * - Handles multiple results: shows bottom sheet for user selection
    * - Handles API errors gracefully with user-friendly messages
    * - URL encodes addresses properly for special characters
    * - Shows loading state during API call
    *
-   * @param address - The address string to geocode
+   * Uses Mapbox's autocomplete-enabled search rather than the Google Geocoding
+   * API so a partial query like a bare street name returns every matching
+   * candidate to choose from, instead of a single best-effort (or zero) result.
+   *
+   * @param address - The address string to search for
    */
   const handleAddressSearch = async (address: string) => {
     if (!address.trim()) {
@@ -405,19 +420,22 @@ export default function NewCall() {
 
     setIsGeocodingAddress(true);
     try {
-      // Get Google Maps API key from CoreStore config
-      const apiKey = config?.GoogleMapsKey;
+      const apiKey = Env.MAPBOX_PUBKEY;
 
       if (!apiKey) {
-        throw new Error('Google Maps API key not configured');
+        throw new Error('Mapbox public key not configured');
       }
 
-      // Make request to Google Maps Geocoding API
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
+      // Make request to the Mapbox Geocoding API
+      const response = await axios.get<MapboxGeocodingResponse>(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${apiKey}${MAPBOX_SEARCH_BIAS_PARAMS}`);
 
-      if (response.data.status === 'OK' && response.data.results.length > 0) {
-        const results = response.data.results;
+      const results: GeocodingResult[] = response.data.features.map((feature) => ({
+        formatted_address: feature.place_name,
+        geometry: { location: { lat: feature.center[1], lng: feature.center[0] } },
+        place_id: feature.id,
+      }));
 
+      if (results.length > 0) {
         if (results.length === 1) {
           // Single result - use it directly
           const result = results[0];
@@ -1122,23 +1140,6 @@ export default function NewCall() {
                     <LinkIcon size={16} color={colorScheme === 'dark' ? '#ffffff' : '#374151'} />
                     <ButtonText className="ml-2">{linkedCall ? t('calls.linked_calls.change', 'Change linked call') : t('calls.linked_calls.select', 'Link to existing call')}</ButtonText>
                   </Button>
-                </View>
-              ) : null}
-            </Card>
-
-            {/* Additional Fields (UDF) */}
-            <Card className={`mb-4 rounded-lg border ${colorScheme === 'dark' ? 'border-neutral-800 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
-              <TouchableOpacity onPress={() => toggleSection('additionalFields')} className="flex-row items-center justify-between p-4">
-                <Text className="text-base font-semibold">{t('calls.additional_fields', 'Additional Fields')}</Text>
-                {sectionsExpanded.additionalFields ? (
-                  <ChevronUpIcon size={16} color={colorScheme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                ) : (
-                  <ChevronDownIcon size={16} color={colorScheme === 'dark' ? '#9ca3af' : '#6b7280'} />
-                )}
-              </TouchableOpacity>
-              {sectionsExpanded.additionalFields ? (
-                <View className="px-4 pb-4">
-                  <UdfFieldsRenderer entityType={0} onValuesChange={setUdfValues} isDark={colorScheme === 'dark'} />
                 </View>
               ) : null}
             </Card>

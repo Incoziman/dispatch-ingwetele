@@ -3,5 +3,5 @@ export class SaveNoteInput {
   public Body: string = '';
   public Category: string = '';
   public IsAdminOnly: boolean = false;
-  public ExpiresOn: string = '';
+  public ExpiresOn: string | null = null;
 }

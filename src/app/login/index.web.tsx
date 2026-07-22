@@ -11,6 +11,7 @@ import * as z from 'zod';
 
 import { Text } from '@/components/ui/text';
 import { useAnalytics } from '@/hooks/use-analytics';
+import { useTenantConfig } from '@/hooks/use-tenant-config';
 import { useAuth } from '@/lib/auth';
 import { Env } from '@/lib/env';
 import { logger } from '@/lib/logging';
@@ -128,6 +129,7 @@ export default function LoginWeb() {
   const { colorScheme } = useColorScheme();
   const { width, height } = useWindowDimensions();
   const { trackEvent } = useAnalytics();
+  const tenantConfig = useTenantConfig();
   const router = useRouter();
   const { login, status, error, isAuthenticated } = useAuth();
 
@@ -282,16 +284,18 @@ export default function LoginWeb() {
             </View>
 
             {/* Watermark Crest */}
-            <View style={styles.watermarkContainer} pointerEvents="none">
-              <Image style={styles.watermarkImage} source={require('@assets/images/Mbombela_CoA.png')} resizeMode="contain" />
-            </View>
+            {tenantConfig.watermarkImageUrl ? (
+              <View style={styles.watermarkContainer} pointerEvents="none">
+                <Image style={styles.watermarkImage} source={{ uri: tenantConfig.watermarkImageUrl }} resizeMode="contain" />
+              </View>
+            ) : null}
 
             {/* Content */}
             <View style={styles.brandingContent}>
               {/* Large Prominent Logo */}
               <Animated.View entering={FadeInDown.delay(200).duration(600)} style={styles.brandingLogoSection}>
                 <View style={styles.brandingLogoStack}>
-                  <Text style={styles.brandingLogoText}>Mbombela</Text>
+                  <Text style={styles.brandingLogoText}>{tenantConfig.displayName}</Text>
                   <Text style={styles.brandingLogoSubtext}>Dispatch</Text>
                 </View>
               </Animated.View>
@@ -325,7 +329,7 @@ export default function LoginWeb() {
             {!isWideScreen ? (
               <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.mobileLogoContainer}>
                 <View style={styles.mobileLogoSection}>
-                  <Text style={StyleSheet.flatten([styles.mobileLogoText, isDark ? styles.mobileLogoTextDark : styles.mobileLogoTextLight])}>Mbombela</Text>
+                  <Text style={StyleSheet.flatten([styles.mobileLogoText, isDark ? styles.mobileLogoTextDark : styles.mobileLogoTextLight])}>{tenantConfig.displayName}</Text>
                   <Text style={StyleSheet.flatten([styles.mobileLogoSubtext, isDark ? styles.mobileLogoSubtextDark : styles.mobileLogoSubtextLight])}>Dispatch</Text>
                 </View>
               </Animated.View>
@@ -425,7 +429,7 @@ export default function LoginWeb() {
                 </Text>
               </Text>
               <Text style={StyleSheet.flatten([styles.copyrightText, isDark ? styles.copyrightTextDark : styles.copyrightTextLight])}>
-                © {new Date().getFullYear()} Mbombela Dispatch. {t('login.footer_text')}
+                © {new Date().getFullYear()} {tenantConfig.displayName} Dispatch. {t('login.footer_text')}
               </Text>
             </Animated.View>
           </Animated.View>

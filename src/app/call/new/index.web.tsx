@@ -19,7 +19,6 @@ import { ContactPickerModal } from '@/components/calls/contact-picker-modal';
 import { DispatchSelectionModal } from '@/components/calls/dispatch-selection-modal';
 import { LinkedCallsModal } from '@/components/calls/linked-calls-modal';
 import { ProtocolSelectorModal, type SelectedProtocol } from '@/components/calls/protocol-selector-modal';
-import { UdfFieldsRenderer } from '@/components/calls/udf-fields-renderer';
 import { Loading } from '@/components/common/loading';
 import FullScreenLocationPicker from '@/components/maps/full-screen-location-picker';
 import LocationPicker from '@/components/maps/location-picker';
@@ -31,10 +30,11 @@ import { HStack } from '@/components/ui/hstack';
 import { Text } from '@/components/ui/text';
 import { VStack } from '@/components/ui/vstack';
 import { getTypesForDescription } from '@/constants/callDescriptionTypeMap';
-import { GEOCODING_BIAS_PARAMS } from '@/constants/geocoding';
+import { GEOCODING_BIAS_PARAMS, MAPBOX_SEARCH_BIAS_PARAMS } from '@/constants/geocoding';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useCallDescriptionTypeMap } from '@/hooks/use-call-description-type-map';
 import { useToast } from '@/hooks/use-toast';
+import { Env } from '@/lib/env';
 import { getPoiDestinationOptionLabel } from '@/lib/poi-display';
 import { type CallResultData } from '@/models/v4/calls/callResultData';
 import { type ContactResultData } from '@/models/v4/contacts/contactResultData';
@@ -92,6 +92,17 @@ interface GeocodingResult {
 interface GeocodingResponse {
   results: GeocodingResult[];
   status: string;
+}
+
+// Mapbox Geocoding API response types
+interface MapboxFeature {
+  id: string;
+  place_name: string;
+  center: [number, number]; // [lng, lat]
+}
+
+interface MapboxGeocodingResponse {
+  features: MapboxFeature[];
 }
 
 // what3words API response types
@@ -589,13 +600,18 @@ export default function NewCallWeb() {
 
     setIsGeocodingAddress(true);
     try {
-      const apiKey = config?.GoogleMapsKey;
-      if (!apiKey) throw new Error('Google Maps API key not configured');
+      const apiKey = Env.MAPBOX_PUBKEY;
+      if (!apiKey) throw new Error('Mapbox public key not configured');
 
-      const response = await axios.get<GeocodingResponse>(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}${GEOCODING_BIAS_PARAMS}`);
+      const response = await axios.get<MapboxGeocodingResponse>(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${apiKey}${MAPBOX_SEARCH_BIAS_PARAMS}`);
 
-      if (response.data.status === 'OK' && response.data.results.length > 0) {
-        const results = response.data.results;
+      const results: GeocodingResult[] = response.data.features.map((feature) => ({
+        formatted_address: feature.place_name,
+        geometry: { location: { lat: feature.center[1], lng: feature.center[0] } },
+        place_id: feature.id,
+      }));
+
+      if (results.length > 0) {
         if (results.length === 1) {
           const result = results[0];
           handleLocationSelected({
@@ -984,19 +1000,6 @@ export default function NewCallWeb() {
                   ) : null}
                 </Card>
               ) : null}
-
-              {/* Additional Fields (UDF) */}
-              <Card style={StyleSheet.flatten([styles.card, isDark ? styles.cardDark : styles.cardLight])}>
-                <Pressable style={styles.collapsibleHeader} onPress={() => toggleSection('additionalFields')}>
-                  <Text style={StyleSheet.flatten([styles.sectionTitle, isDark ? styles.sectionTitleDark : styles.sectionTitleLight, { marginBottom: 0 }])}>{t('calls.additional_fields', 'Additional Fields')}</Text>
-                  <View>{sectionsExpanded.additionalFields ? <ChevronUpIcon size={20} color={isDark ? '#9ca3af' : '#6b7280'} /> : <ChevronDownIcon size={20} color={isDark ? '#9ca3af' : '#6b7280'} />}</View>
-                </Pressable>
-                {sectionsExpanded.additionalFields ? (
-                  <View style={{ marginTop: 16 }}>
-                    <UdfFieldsRenderer entityType={0} onValuesChange={setUdfValues} isDark={isDark} />
-                  </View>
-                ) : null}
-              </Card>
             </View>
 
             {/* Right Column - Location, Dispatch, Protocols, Linked Call */}

@@ -18,6 +18,7 @@ import { Input, InputField, InputIcon, InputSlot } from '@/components/ui/input';
 import { Pressable } from '@/components/ui/pressable';
 import { Text } from '@/components/ui/text';
 import colors from '@/constants/colors';
+import { useTenantConfig } from '@/hooks/use-tenant-config';
 import { useAuth } from '@/lib/auth';
 import { logger } from '@/lib/logging';
 import useLockscreenStore from '@/stores/lockscreen/store';
@@ -35,6 +36,8 @@ type FormType = z.infer<typeof lockscreenFormSchema>;
 export default function Lockscreen() {
   const { colorScheme } = useColorScheme();
   const { t } = useTranslation();
+  const tenantConfig = useTenantConfig();
+  const isBranded = tenantConfig.tenantId !== 'default';
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
@@ -107,7 +110,15 @@ export default function Lockscreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={10}>
         <View className="flex-1 justify-center bg-white p-4 dark:bg-gray-950">
           <View className="items-center justify-center">
-            <Image style={{ width: '96%' }} source={colorScheme === 'dark' ? require('@assets/images/Resgrid_JustText_White.png') : require('@assets/images/Resgrid_JustText.png')} resizeMode="contain" />
+            {isBranded ? (
+              <View className="items-center justify-center">
+                {tenantConfig.watermarkImageUrl ? <Image style={{ width: 96, height: 96, marginBottom: 12 }} source={{ uri: tenantConfig.watermarkImageUrl }} resizeMode="contain" /> : null}
+                <Text className="text-center text-3xl font-bold text-gray-900 dark:text-white">{tenantConfig.displayName}</Text>
+                <Text className="text-center text-sm font-medium uppercase tracking-widest text-gray-500 dark:text-gray-400">Dispatch</Text>
+              </View>
+            ) : (
+              <Image style={{ width: '96%' }} source={colorScheme === 'dark' ? require('@assets/images/Resgrid_JustText_White.png') : require('@assets/images/Resgrid_JustText.png')} resizeMode="contain" />
+            )}
 
             {/* Lock Icon */}
             <View className="my-8">

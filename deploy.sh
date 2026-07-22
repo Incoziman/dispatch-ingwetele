@@ -1,29 +1,59 @@
 #!/bin/sh
-# Rebuild and redeploy the dispatch-ingwetele container from current source.
-# Run this from ~/Dispatch after pulling/making code changes.
+# Build the shared dispatch:latest image and (re)deploy ONE tenant's
+# container from it.
+#   Usage: ./deploy.sh <tenant>      e.g. ./deploy.sh mbombela
+#
+# Per-tenant ops values (container name, host port, API/env targets) live in
+# ./tenants/<tenant>.env, sourced below. Branding (logo/watermark/display
+# name) is NOT here - it lives in
+# /home/res/dispatch-runtime-config/<tenant>/tenant-config.json, bind-mounted
+# below, and is read at runtime (see src/hooks/use-tenant-config.ts). This
+# keeps ONE image (dispatch:latest) shared across all tenants - tenants
+# differ only by which files get bind-mounted into their container.
 set -e
 
 cd "$(dirname "$0")"
 
-docker tag dispatch-ingwetele:latest dispatch-ingwetele:previous 2>/dev/null || true
-docker build -t dispatch-ingwetele:latest .
+TENANT="$1"
+if [ -z "$TENANT" ]; then
+  echo "Usage: $0 <tenant>   (e.g. mbombela, mashishing)" >&2
+  exit 1
+fi
 
-docker stop dispatch-ingwetele 2>/dev/null || true
-docker rm dispatch-ingwetele 2>/dev/null || true
+TENANT_ENV="tenants/${TENANT}.env"
+if [ ! -f "$TENANT_ENV" ]; then
+  echo "No such tenant config: $TENANT_ENV" >&2
+  exit 1
+fi
+. "$TENANT_ENV"
+
+RUNTIME_CONFIG_DIR="/home/res/dispatch-runtime-config/${TENANT}"
+if [ ! -f "${RUNTIME_CONFIG_DIR}/tenant-config.json" ]; then
+  echo "Missing ${RUNTIME_CONFIG_DIR}/tenant-config.json - create it before deploying." >&2
+  exit 1
+fi
+
+docker tag dispatch:latest "dispatch:${TENANT}-previous" 2>/dev/null || true
+docker build -t dispatch:latest .
+
+docker stop "$CONTAINER_NAME" 2>/dev/null || true
+docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
 docker run -d \
-  --name dispatch-ingwetele \
+  --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   --network resgrid-setup_rgmain \
-  -p 8081:80 \
+  -p "${HOST_PORT}:80" \
+  -v "${RUNTIME_CONFIG_DIR}/tenant-config.json:/usr/share/nginx/html/tenant-config.json:ro" \
   -v /home/res/dispatch-runtime-config/call-description-type-map.json:/usr/share/nginx/html/call-description-type-map.json:ro \
-  -e DISPATCH_REALTIME_GEO_HUB_NAME=geolocationHub \
-  -e DISPATCH_MAPBOX_PUBKEY=pk.eyJ1IjoiaW5jb3ppbWFuIiwiYSI6ImNtcjBncHNzZTBhaXcycHNieGRhZmFiMGsifQ.voGgLAXXs_EJIx6Z-JclZA \
-  -e APP_ENV=production \
-  -e DISPATCH_BASE_API_URL=https://api.mpulims.org \
-  -e DISPATCH_API_VERSION=v4 \
-  -e DISPATCH_RESGRID_API_URL=/api/v4 \
-  -e DISPATCH_CHANNEL_HUB_NAME=eventingHub \
-  dispatch-ingwetele:latest
+  -e DISPATCH_REALTIME_GEO_HUB_NAME="${DISPATCH_REALTIME_GEO_HUB_NAME}" \
+  -e DISPATCH_MAPBOX_PUBKEY="${DISPATCH_MAPBOX_PUBKEY}" \
+  -e APP_ENV="${APP_ENV}" \
+  -e DISPATCH_BASE_API_URL="${DISPATCH_BASE_API_URL}" \
+  -e DISPATCH_API_VERSION="${DISPATCH_API_VERSION}" \
+  -e DISPATCH_RESGRID_API_URL="${DISPATCH_RESGRID_API_URL}" \
+  -e DISPATCH_CHANNEL_HUB_NAME="${DISPATCH_CHANNEL_HUB_NAME}" \
+  dispatch:latest
 
-echo "Deployed. To roll back to the prior build, see rollback.sh."
+echo "Deployed ${CONTAINER_NAME} (tenant=${TENANT}) from dispatch:latest."
+echo "To roll back: ./rollback.sh ${TENANT}"
