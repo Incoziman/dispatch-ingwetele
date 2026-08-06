@@ -14,6 +14,7 @@ import PinDetailModal from '@/components/maps/pin-detail-modal';
 import { FocusAwareStatusBar } from '@/components/ui/focus-aware-status-bar';
 import { useAnalytics } from '@/hooks/use-analytics';
 import { useAppLifecycle } from '@/hooks/use-app-lifecycle';
+import { useFallbackMapView } from '@/hooks/use-fallback-map-view';
 import { MapLayerType, useMapLayers } from '@/hooks/use-map-layers';
 import { useMapSignalRUpdates } from '@/hooks/use-map-signalr-updates';
 import { Env } from '@/lib/env';
@@ -51,6 +52,12 @@ export default function Map() {
     heading: state.heading,
     isMapLocked: state.isMapLocked,
   }));
+
+  const hasUserLocation = Boolean(location.latitude && location.longitude);
+
+  // Where to open before (or without) a GPS fix: the last call, else the service area.
+  const fallbackView = useFallbackMapView();
+  const hasRecenteredOnCall = useRef(false);
 
   // Map layers hook
   const { layers, visibleLayers, isLoading: isLayersLoading, fetchLayers, toggleLayer, showAllLayers, hideAllLayers, getVisibleLayerData } = useMapLayers({ initialLayerType: MapLayerType.ALL, autoFetch: true });
@@ -190,6 +197,28 @@ export default function Map() {
       }
     }
   }, [isMapReady, location.latitude, location.longitude, location.heading, location.isMapLocked, hasUserMovedMap]);
+
+  // Without a GPS fix the camera has nothing to follow, so point it at the most
+  // recent call once the calls list loads (they usually arrive after the map).
+  useEffect(() => {
+    if (!isMapReady || hasUserLocation || hasRecenteredOnCall.current || hasUserMovedMap) return;
+    if (fallbackView.source !== 'call') return;
+
+    hasRecenteredOnCall.current = true;
+    cameraRef.current?.setCamera({
+      centerCoordinate: fallbackView.center,
+      zoomLevel: fallbackView.zoom,
+      animationDuration: 1000,
+    });
+
+    logger.info({
+      message: 'No user location, centering map on most recent call',
+      context: {
+        longitude: fallbackView.center[0],
+        latitude: fallbackView.center[1],
+      },
+    });
+  }, [isMapReady, hasUserLocation, hasUserMovedMap, fallbackView]);
 
   // Reset hasUserMovedMap when map gets locked and reset camera when unlocked
   useEffect(() => {
@@ -555,6 +584,7 @@ export default function Map() {
         >
           <Mapbox.Camera
             ref={cameraRef}
+            defaultSettings={{ centerCoordinate: fallbackView.center, zoomLevel: fallbackView.zoom }}
             followZoomLevel={location.isMapLocked ? 16 : 12}
             followUserLocation={location.isMapLocked}
             followUserMode={location.isMapLocked ? Mapbox.UserTrackingMode.FollowWithHeading : undefined}

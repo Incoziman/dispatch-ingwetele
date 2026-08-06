@@ -9,9 +9,11 @@ import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacit
 import { getMapDataAndMarkers } from '@/api/mapping/mapping';
 import { FocusAwareStatusBar } from '@/components/ui/focus-aware-status-bar';
 import { useAnalytics } from '@/hooks/use-analytics';
+import { useFallbackMapView } from '@/hooks/use-fallback-map-view';
 import { MapLayerType, useMapLayers } from '@/hooks/use-map-layers';
 import { Env } from '@/lib/env';
 import { logger } from '@/lib/logging';
+import { isWithinServiceArea, KNOWN_LOCATION_ZOOM } from '@/lib/map-defaults';
 import { getMapPinSummary, hasValidMapCoordinates } from '@/lib/map-markers';
 import { createMapMarkerElement } from '@/lib/map-markers-web';
 import { createDefaultVisiblePoiLayerIds, filterMapPinsByPoiLayers, getPoiMapLayerId } from '@/lib/poi-map-layers';
@@ -42,6 +44,16 @@ export default function MapWeb() {
     latitude: state.latitude,
     longitude: state.longitude,
   }));
+
+  const hasUserLocation = Boolean(location.latitude && location.longitude);
+
+  // Where to open when we don't know where the user is: the last call, else the
+  // service area. Held in a ref as well so map setup can read it without making
+  // the map tear down and rebuild every time the calls list refreshes.
+  const fallbackView = useFallbackMapView();
+  const fallbackViewRef = useRef(fallbackView);
+  fallbackViewRef.current = fallbackView;
+  const hasRecenteredOnCall = useRef(false);
 
   // Map layers hook
   const { layers, visibleLayers, isLoading: isLayersLoading, fetchLayers, toggleLayer, showAllLayers, hideAllLayers, getVisibleLayerData } = useMapLayers({ initialLayerType: MapLayerType.ALL, autoFetch: true });
@@ -108,13 +120,13 @@ export default function MapWeb() {
 
     mapboxgl.accessToken = Env.MAPBOX_PUBKEY;
 
-    const initialCenter: [number, number] = location.longitude && location.latitude ? [location.longitude, location.latitude] : [-98.5795, 39.8283]; // Center of USA as fallback
+    const initialView = hasUserLocation ? { center: [location.longitude, location.latitude] as [number, number], zoom: KNOWN_LOCATION_ZOOM } : fallbackViewRef.current;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: getMapStyle(),
-      center: initialCenter,
-      zoom: location.latitude && location.longitude ? 12 : 3,
+      center: initialView.center,
+      zoom: initialView.zoom,
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -143,7 +155,22 @@ export default function MapWeb() {
       map.current?.remove();
       map.current = null;
     };
-  }, [getMapStyle, location.latitude, location.longitude]);
+  }, [getMapStyle, location.latitude, location.longitude, hasUserLocation]);
+
+  // Calls usually land after the map has already opened. Slide over to the
+  // latest one instead of leaving the dispatcher on the service-area overview.
+  useEffect(() => {
+    if (!map.current || !isMapReady) return;
+    if (hasUserLocation || hasRecenteredOnCall.current) return;
+    if (fallbackView.source !== 'call') return;
+
+    hasRecenteredOnCall.current = true;
+    map.current.flyTo({
+      center: fallbackView.center,
+      zoom: fallbackView.zoom,
+      duration: 1500,
+    });
+  }, [isMapReady, hasUserLocation, fallbackView]);
 
   // Update map style when theme changes
   useEffect(() => {
@@ -171,13 +198,19 @@ export default function MapWeb() {
           setMapPins(mapDataAndMarkers.Data.MapMakerInfos);
           syncPoiLayers(mapDataAndMarkers.Data.PoiLayers ?? []);
 
-          // Center map on the data center if provided
-          if (mapDataAndMarkers.Data.CenterLat && mapDataAndMarkers.Data.CenterLon && map.current) {
+          // Center map on the department's configured center, but only when we
+          // have nothing local to show and the center is actually in the service
+          // area - an unconfigured department reports the Resgrid stock center
+          // (Carson City, NV), which would yank the map off to Nevada.
+          const { latitude, longitude } = useLocationStore.getState();
+          const hasLocalAnchor = Boolean(latitude && longitude) || fallbackViewRef.current.source === 'call';
+
+          if (!hasLocalAnchor && mapDataAndMarkers.Data.CenterLat && mapDataAndMarkers.Data.CenterLon && map.current) {
             const centerLat = parseFloat(mapDataAndMarkers.Data.CenterLat);
             const centerLon = parseFloat(mapDataAndMarkers.Data.CenterLon);
             const zoomLevel = mapDataAndMarkers.Data.ZoomLevel ? parseFloat(mapDataAndMarkers.Data.ZoomLevel) : 12;
 
-            if (!isNaN(centerLat) && !isNaN(centerLon)) {
+            if (!isNaN(centerLat) && !isNaN(centerLon) && isWithinServiceArea(centerLon, centerLat)) {
               map.current.flyTo({
                 center: [centerLon, centerLat],
                 zoom: zoomLevel,

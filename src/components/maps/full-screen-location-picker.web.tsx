@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native';
 
 import { Button, ButtonText } from '@/components/ui/button';
+import { useFallbackMapView } from '@/hooks/use-fallback-map-view';
 import { Env } from '@/lib/env';
 
 // Mapbox GL CSS needs to be injected for web
@@ -32,6 +33,11 @@ const FullScreenLocationPicker: React.FC<FullScreenLocationPickerProps> = ({ ini
   const [isLoading, setIsLoading] = useState(false);
   const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
   const [address, setAddress] = useState<string | undefined>(undefined);
+
+  // Nothing picked yet: start on the last call rather than half a world away.
+  const fallbackView = useFallbackMapView();
+  const fallbackViewRef = useRef(fallbackView);
+  fallbackViewRef.current = fallbackView;
 
   // Inject Mapbox GL CSS
   useEffect(() => {
@@ -134,13 +140,13 @@ const FullScreenLocationPicker: React.FC<FullScreenLocationPickerProps> = ({ ini
 
     mapboxgl.accessToken = Env.MAPBOX_PUBKEY;
 
-    const initialCenter: [number, number] = currentLocation ? [currentLocation.longitude, currentLocation.latitude] : [-98.5795, 39.8283];
+    const initialView = currentLocation ? { center: [currentLocation.longitude, currentLocation.latitude] as [number, number], zoom: 15 } : fallbackViewRef.current;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
-      center: initialCenter,
-      zoom: currentLocation ? 15 : 3,
+      center: initialView.center,
+      zoom: initialView.zoom,
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');

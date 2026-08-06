@@ -5,8 +5,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { getMapDataAndMarkers } from '@/api/mapping/mapping';
+import { useFallbackMapView } from '@/hooks/use-fallback-map-view';
 import { Env } from '@/lib/env';
 import { logger } from '@/lib/logging';
+import { isWithinServiceArea, KNOWN_LOCATION_ZOOM } from '@/lib/map-defaults';
 import { getMapPinSummary, hasValidMapCoordinates } from '@/lib/map-markers';
 import { createMapMarkerElement } from '@/lib/map-markers-web';
 import { type MapMakerInfoData } from '@/models/v4/mapping/getMapDataAndMarkersData';
@@ -66,6 +68,16 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
     longitude: state.longitude,
   }));
 
+  const hasUserLocation = Boolean(location.latitude && location.longitude);
+
+  // Opening view when we don't know where the user is: the last call, else the
+  // service area. Mirrored into a ref so map setup and the pin fetch can read it
+  // without rebuilding the map each time the calls list refreshes.
+  const fallbackView = useFallbackMapView();
+  const fallbackViewRef = useRef(fallbackView);
+  fallbackViewRef.current = fallbackView;
+  const hasRecenteredOnCall = useRef(false);
+
   // Use external pins if provided, otherwise use internal pins
   const mapPins = externalPins ?? internalPins;
 
@@ -92,13 +104,13 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
 
     mapboxgl.accessToken = Env.MAPBOX_PUBKEY;
 
-    const initialCenter: [number, number] = location.longitude && location.latitude ? [location.longitude, location.latitude] : [-98.5795, 39.8283];
+    const initialView = hasUserLocation ? { center: [location.longitude, location.latitude] as [number, number], zoom: KNOWN_LOCATION_ZOOM } : fallbackViewRef.current;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: getMapStyle(),
-      center: initialCenter,
-      zoom: location.latitude && location.longitude ? 12 : 3,
+      center: initialView.center,
+      zoom: initialView.zoom,
       interactive,
     });
 
@@ -127,7 +139,21 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
       map.current?.remove();
       map.current = null;
     };
-  }, [getMapStyle, location.latitude, location.longitude, interactive, showUserLocation, onMapReady]);
+  }, [getMapStyle, location.latitude, location.longitude, hasUserLocation, interactive, showUserLocation, onMapReady]);
+
+  // Calls usually land after the map has opened - catch up to the latest one.
+  useEffect(() => {
+    if (!map.current || !isMapReady) return;
+    if (hasUserLocation || hasRecenteredOnCall.current) return;
+    if (fallbackView.source !== 'call') return;
+
+    hasRecenteredOnCall.current = true;
+    map.current.flyTo({
+      center: fallbackView.center,
+      zoom: fallbackView.zoom,
+      duration: 1500,
+    });
+  }, [isMapReady, hasUserLocation, fallbackView]);
 
   // Update map style when theme changes
   useEffect(() => {
@@ -164,20 +190,26 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
           const markers = mapDataAndMarkers.Data.MapMakerInfos;
           setInternalPins(markers);
 
-          // Center map on the data center if provided
-          if (mapDataAndMarkers.Data.CenterLat && mapDataAndMarkers.Data.CenterLon && map.current) {
+          // Center on the department's configured center only when we have
+          // nothing local to show and it is actually in the service area - an
+          // unconfigured department reports the Resgrid stock center (Carson
+          // City, NV), which would pull the map off to Nevada.
+          const { latitude, longitude } = useLocationStore.getState();
+          const hasLocalAnchor = Boolean(latitude && longitude) || fallbackViewRef.current.source === 'call';
+
+          if (!hasLocalAnchor && mapDataAndMarkers.Data.CenterLat && mapDataAndMarkers.Data.CenterLon && map.current) {
             const centerLat = parseFloat(mapDataAndMarkers.Data.CenterLat);
             const centerLon = parseFloat(mapDataAndMarkers.Data.CenterLon);
             const zoomLevel = mapDataAndMarkers.Data.ZoomLevel ? parseFloat(mapDataAndMarkers.Data.ZoomLevel) : 12;
 
-            if (!isNaN(centerLat) && !isNaN(centerLon)) {
+            if (!isNaN(centerLat) && !isNaN(centerLon) && isWithinServiceArea(centerLon, centerLat)) {
               map.current.flyTo({
                 center: [centerLon, centerLat],
                 zoom: zoomLevel,
                 duration: 1500,
               });
             }
-          } else if (markers.length > 0 && map.current) {
+          } else if (!hasLocalAnchor && markers.length > 0 && map.current) {
             // Fallback: Calculate center from markers if CenterLat/CenterLon not provided
             const center = calculateCenterFromMarkers(markers);
             if (center) {

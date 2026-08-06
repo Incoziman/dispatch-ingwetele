@@ -5,7 +5,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { getMapDataAndMarkers } from '@/api/mapping/mapping';
+import { useFallbackMapView } from '@/hooks/use-fallback-map-view';
 import { logger } from '@/lib/logging';
+import { KNOWN_LOCATION_ZOOM } from '@/lib/map-defaults';
 import { type MapMakerInfoData } from '@/models/v4/mapping/getMapDataAndMarkersData';
 import { type GetMapLayersData } from '@/models/v4/mapping/getMapLayersResultData';
 import { useLocationStore } from '@/stores/app/location-store';
@@ -62,6 +64,26 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
     latitude: state.latitude,
     longitude: state.longitude,
   }));
+
+  const hasUserLocation = Boolean(location.latitude && location.longitude);
+
+  // Opening view without a GPS fix: the last call, else the service area.
+  const fallbackView = useFallbackMapView();
+  const hasRecenteredOnCall = useRef(false);
+
+  // Calls usually load after the map, and defaultSettings only applies on first
+  // render, so move the camera over once we know where the latest call was.
+  useEffect(() => {
+    if (!isMapReady || hasUserLocation || hasRecenteredOnCall.current) return;
+    if (fallbackView.source !== 'call') return;
+
+    hasRecenteredOnCall.current = true;
+    cameraRef.current?.setCamera({
+      centerCoordinate: fallbackView.center,
+      zoomLevel: fallbackView.zoom,
+      animationDuration: 1000,
+    });
+  }, [isMapReady, hasUserLocation, fallbackView]);
 
   // Use external pins if provided, otherwise use internal pins
   const mapPins = externalPins ?? internalPins;
@@ -267,8 +289,9 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
     onMapReady?.();
   };
 
-  // Initial camera position
-  const initialCenter: [number, number] = location.longitude && location.latitude ? [location.longitude, location.latitude] : [-98.5795, 39.8283];
+  // Initial camera position: the user if we have a fix, else the last call, else
+  // the service area.
+  const initialView = location.longitude && location.latitude ? { center: [location.longitude, location.latitude] as [number, number], zoom: KNOWN_LOCATION_ZOOM } : fallbackView;
 
   return (
     <View style={StyleSheet.flatten([styles.container, style])} testID={testID}>
@@ -282,7 +305,7 @@ export const UnifiedMapView: React.FC<UnifiedMapViewProps> = ({
         rotateEnabled={interactive}
         pitchEnabled={interactive}
       >
-        <Mapbox.Camera ref={cameraRef} defaultSettings={{ centerCoordinate: initialCenter, zoomLevel: location.latitude && location.longitude ? 12 : 3 }} />
+        <Mapbox.Camera ref={cameraRef} defaultSettings={{ centerCoordinate: initialView.center, zoomLevel: initialView.zoom }} />
 
         {/* Render custom layers */}
         {renderMapLayers()}
